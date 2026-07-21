@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "name": "ECDICT",
+    "repository": "https://github.com/skywind3000/ECDICT",
+    "license": "MIT",
+    "commit": "82c9872576b23118d7c42e920c11beb77f510ae2",
+    "date": "2025-01-02"
+  },
+  "banks": [
+    {
+      "id": "gaokao",
+      "name": "高考词汇",
+      "file": "gaokao.json",
+      "count": 3677,
+      "basis": "ECDICT 高考大纲标签汇编",
+      "status": "syllabus-indexed",
+      "missingEnglish": 9,
+      "missingChinese": 0
+    },
+    {
+      "id": "cet4",
+      "name": "CET-4",
+      "file": "cet4.json",
+      "count": 3849,
+      "basis": "ECDICT CET-4 大纲标签汇编",
+      "status": "syllabus-indexed",
+      "missingEnglish": 3,
+      "missingChinese": 0
+    },
+    {
+      "id": "cet6",
+      "name": "CET-6",
+      "file": "cet6.json",
+      "count": 5805,
+      "basis": "ECDICT CET-4 基础与 CET-6 增量合集",
+      "status": "syllabus-indexed",
+      "missingEnglish": 7,
+      "missingChinese": 0
+    },
+    {
+      "id": "ielts",
+      "name": "IELTS",
+      "file": "ielts.json",
+      "count": 5040,
+      "basis": "ECDICT IELTS 备考标签汇编",
+      "status": "curated",
+      "missingEnglish": 21,
+      "missingChinese": 0
+    },
+    {
+      "id": "toefl",
+      "name": "TOEFL",
+      "file": "toefl.json",
+      "count": 6974,
+      "basis": "ECDICT TOEFL 备考标签汇编",
+      "status": "curated",
+      "missingEnglish": 22,
+      "missingChinese": 0
+    }
+  ]
+}
