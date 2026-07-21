@@ -53,6 +53,22 @@ Vite 使用相对资源路径，因此用户站点和项目子路径都可部署
 
 - 接口、模型、鉴权方式和输出语言保存在 localStorage。
 - API key 只保存在当前 sessionStorage，不会进入源码、构建产物或 GitHub Actions。
-- 静态页面直接请求用户配置的服务，因此该服务必须允许 GitHub Pages 来源的 CORS 请求。
+- 静态页面直接请求用户配置的服务，因此该服务必须允许当前站点来源的 CORS 请求。
+
+### 从 GitHub Pages 连接本地模型
+
+本地开发（`http://localhost`）可直接连本机模型。但**已发布的 GitHub Pages 是公网 HTTPS 页面**，浏览器要求“公网页面访问本机 `127.0.0.1`”先通过 Private Network Access 预检，本地模型服务通常不会返回所需的放行头，请求会被浏览器拦下——这是浏览器安全策略，不是应用缺陷。
+
+仓库内置一个零依赖的本地代理来补齐 CORS 与 PNA 放行头：
+
+```bash
+# 先启动本地模型，再启动代理（默认监听 8788，转发到 127.0.0.1:8191）
+npm run ai:proxy
+# 模型端口不同时覆盖：
+TARGET_PORT=8080 npm run ai:proxy
+```
+
+随后在「AI 连接」里把接口地址填为 `http://127.0.0.1:8788/v1`。代理只监听本机回环地址，不对外暴露。也可改用 HTTPS 隧道（如 Cloudflare Tunnel、ngrok）把模型暴露成 `https://` 地址并开启 CORS。
+
 - 成功的 AI 讲解按需加载 Markdown 渲染器，支持标题、列表、强调、引用、代码、表格和链接。
 - 原始 HTML 与图片不会渲染；危险 URL 会被过滤，外部链接使用隔离的新标签页打开。

@@ -88,6 +88,43 @@ export function resolveCompletionUrl(endpoint: string): string {
   return url.toString();
 }
 
+/**
+ * Builds guidance for a failed fetch (a TypeError, which the browser also raises
+ * for connection-refused, mixed-content and blocked private-network requests).
+ * Loopback endpoints called from a deployed HTTPS page are the common trap, so
+ * that case gets specific, actionable steps instead of a generic message.
+ */
+function connectionFailureMessage(endpoint: string): string {
+  let host = '';
+  let endpointIsHttp = false;
+  try {
+    const url = new URL(resolveCompletionUrl(endpoint));
+    host = url.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+    endpointIsHttp = url.protocol === 'http:';
+  } catch {
+    return '浏览器无法连接该接口。请检查地址、HTTPS 与 CORS 设置。';
+  }
+
+  const isLoopback = host === 'localhost'
+    || host === '127.0.0.1'
+    || host === '::1'
+    || host === '0.0.0.0';
+  const pageIsHttps = typeof globalThis.location !== 'undefined'
+    && globalThis.location.protocol === 'https:';
+
+  if (isLoopback) {
+    if (pageIsHttps && endpointIsHttp) {
+      return '无法连接本地模型：本站以 HTTPS 打开，却要访问本机 http:// 服务，浏览器会拦截或拒绝。'
+        + '请确认①本地模型已启动并监听该端口（localhost 与 127.0.0.1 可互换再试）；'
+        + '②本地服务已开启 CORS 并放行本站来源。'
+        + '要用本地模型，最稳妥的是本地运行本应用（npm run dev）后再连本地模型，或用 HTTPS 隧道把模型暴露出来。';
+    }
+    return '无法连接本地模型：请确认服务已启动、端口正确（localhost 与 127.0.0.1 可互换再试），并已开启 CORS 放行本站来源。';
+  }
+
+  return '浏览器无法连接该接口。请检查地址、HTTPS 与 CORS 设置。';
+}
+
 function responseError(payload: unknown, fallback: string): string {
   if (!payload || typeof payload !== 'object') return fallback;
   const error = (payload as { error?: unknown }).error;
@@ -148,7 +185,7 @@ export async function requestCompletion(
       throw new Error('AI 句子生成超时，已切换到离线串联。');
     }
     if (error instanceof TypeError) {
-      throw new Error('浏览器无法连接该接口。请检查地址、HTTPS 与 CORS 设置。');
+      throw new Error(connectionFailureMessage(config.endpoint));
     }
     throw error;
   }

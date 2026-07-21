@@ -4,17 +4,12 @@ import {
   reconcileSelectedVoiceURI,
   resolveSpeechVoice,
   speechErrorMessage,
-  speechStartFailureMessage,
   type SpeechVoiceOption,
 } from '../domain/speech';
 
 export type SpeechPlaybackState = 'idle' | 'loading' | 'speaking' | 'success' | 'error';
 
 const VOICE_STORAGE_KEY = 'wordbuddy.speech.voice.v1';
-
-// Give slow or network-backed voices time to start before treating a missing
-// onstart event as a real failure.
-const SPEECH_START_TIMEOUT_MS = 4000;
 
 function storedVoiceURI(): string {
   try {
@@ -31,17 +26,14 @@ export function useSpeech() {
   const [playbackState, setPlaybackState] = useState<SpeechPlaybackState>('idle');
   const [error, setError] = useState('');
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
-  const startTimerRef = useRef<number | null>(null);
-  const watchdogRef = useRef<number | null>(null);
   const maxDurationRef = useRef<number | null>(null);
+  const pendingStartRef = useRef<number | null>(null);
 
   const clearTimers = useCallback(() => {
-    if (startTimerRef.current !== null) window.clearTimeout(startTimerRef.current);
-    if (watchdogRef.current !== null) window.clearTimeout(watchdogRef.current);
     if (maxDurationRef.current !== null) window.clearTimeout(maxDurationRef.current);
-    startTimerRef.current = null;
-    watchdogRef.current = null;
+    if (pendingStartRef.current !== null) window.clearTimeout(pendingStartRef.current);
     maxDurationRef.current = null;
+    pendingStartRef.current = null;
   }, []);
 
   const stop = useCallback(() => {
@@ -108,82 +100,78 @@ export function useSpeech() {
       return;
     }
 
-    clearTimers();
-    utteranceRef.current = null;
-    // Chrome's speech engine can wedge after long page uptime or repeated use and
-    // then silently stop producing audio without firing any events. Cancelling
-    // before every utterance resets that stuck state.
-    synth.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    // Resolve against a fresh voice list at speak time. Voice objects cached from
-    // an earlier getVoices() call can go stale, and some browsers then silently
-    // refuse to speak an utterance bound to a stale voice.
-    const voice = resolveSpeechVoice(synth.getVoices(), voiceURI);
-    if (voice) utterance.voice = voice;
-    utterance.lang = voice?.lang ?? 'en-US';
-    utterance.rate = 0.9;
-    utterance.pitch = 1;
-    utteranceRef.current = utterance;
-    // Upper bound on how long this utterance could reasonably play, so the UI
-    // always resolves even when the engine never fires onend.
-    const maxDurationMs = Math.min(20_000, 2_500 + text.length * 120);
-    setPlaybackState('loading');
-    setError('');
+    const startUtterance = () => {
+      const utterance = new SpeechSynthesisUtterance(text);
+      // Resolve against a fresh voice list at speak time; cached voice objects
+      // can go stale and some engines then refuse to speak.
+      const voice = resolveSpeechVoice(synth.getVoices(), voiceURI);
+      if (voice) utterance.voice = voice;
+      utterance.lang = voice?.lang ?? 'en-US';
+      utterance.rate = 0.9;
+      utterance.pitch = 1;
+      utterance.volume = 1;
+      utteranceRef.current = utterance;
+      // Upper bound so the UI always resolves even if the engine never fires onend.
+      const maxDurationMs = Math.min(20_000, 2_500 + text.length * 120);
 
-    utterance.onstart = () => {
-      if (utteranceRef.current !== utterance) return;
-      if (watchdogRef.current !== null) window.clearTimeout(watchdogRef.current);
-      watchdogRef.current = null;
+      // onstart is unreliable (Edge often never fires it), so it only upgrades
+      // the label; success/failure are driven solely by onend/onerror.
+      utterance.onstart = () => {
+        if (utteranceRef.current === utterance) setPlaybackState('speaking');
+      };
+      utterance.onend = () => {
+        if (utteranceRef.current !== utterance) return;
+        clearTimers();
+        utteranceRef.current = null;
+        setPlaybackState('success');
+      };
+      utterance.onerror = (event) => {
+        if (utteranceRef.current !== utterance) return;
+        clearTimers();
+        utteranceRef.current = null;
+        if (event.error === 'canceled' || event.error === 'interrupted') {
+          setPlaybackState('idle');
+          return;
+        }
+        setPlaybackState('error');
+        setError(speechErrorMessage(event.error));
+      };
+
       setPlaybackState('speaking');
+      setError('');
+      // resume() unsticks an engine left in a wedged/paused state by an earlier
+      // cancel() — a browser-global Edge/Chrome quirk that can survive reloads.
+      synth.resume();
+      synth.speak(utterance);
+
       maxDurationRef.current = window.setTimeout(() => {
         if (utteranceRef.current !== utterance) return;
         utteranceRef.current = null;
         setPlaybackState('success');
       }, maxDurationMs);
     };
-    utterance.onend = () => {
-      if (utteranceRef.current !== utterance) return;
-      clearTimers();
-      utteranceRef.current = null;
-      setPlaybackState('success');
-    };
-    utterance.onerror = (event) => {
-      if (utteranceRef.current !== utterance) return;
-      clearTimers();
-      utteranceRef.current = null;
-      if (event.error === 'canceled' || event.error === 'interrupted') {
-        setPlaybackState('idle');
-        return;
-      }
-      setPlaybackState('error');
-      setError(speechErrorMessage(event.error));
-    };
 
-    function startSpeaking() {
-      if (utteranceRef.current !== utterance) return;
-      synth.resume();
-      synth.speak(utterance);
-      watchdogRef.current = window.setTimeout(() => {
-        if (utteranceRef.current !== utterance) return;
-        // A healthy browser fires onstart within a second. If it never arrives,
-        // audio is almost certainly not being produced here (embedded webview,
-        // or a voice that needs to be downloaded). Surface guidance and stop the
-        // spinner without cancelling anything that might still start.
-        utteranceRef.current = null;
-        setPlaybackState('error');
-        setError(speechStartFailureMessage(window.navigator.userAgent));
-      }, SPEECH_START_TIMEOUT_MS);
+    clearTimers();
+    utteranceRef.current = null;
+    // ROOT-CAUSE FIX: never call cancel() in the same tick as speak(). Edge
+    // drops an utterance spoken immediately after a cancel() (proven: it fires
+    // `canceled` with no audio) and repeated same-tick cancels wedge the global
+    // engine. So cancel ONLY to interrupt active playback, and defer the
+    // replacement one tick. The common path (nothing playing) speaks
+    // synchronously to keep the user gesture, mirroring the stable Study-Room player.
+    if (synth.speaking || synth.pending) {
+      synth.cancel();
+      pendingStartRef.current = window.setTimeout(startUtterance, 0);
+    } else {
+      startUtterance();
     }
-
-    // Let the cancel() settle before speaking; Chrome drops utterances that are
-    // spoken in the same tick as a cancel.
-    startTimerRef.current = window.setTimeout(startSpeaking, 60);
   }, [clearTimers, isSupported, selectedVoiceURI]);
 
   const selectedVoice = resolveSpeechVoice(voices, selectedVoiceURI);
-  const isPlaybackAvailable = isSupported
-    && Boolean(selectedVoice)
-    && playbackState !== 'error';
+  // Capability is static: supported engine + an available voice. It must NOT
+  // depend on the transient playbackState, or a single runtime error would
+  // wrongly disable listening questions for the rest of the session.
+  const isPlaybackAvailable = isSupported && Boolean(selectedVoice);
 
   return {
     isSupported,
