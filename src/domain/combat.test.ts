@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  DEFAULT_BASE_DAMAGE,
   combatReducer,
   createCombatState,
   type ResolvedCombatAnswer,
@@ -22,15 +21,15 @@ function started(questionCount = 10) {
 }
 
 describe('combat engine', () => {
-  it('calibrates enemy health around an eighty-percent clear', () => {
+  it('sizes the roster to one monster per question', () => {
     const state = createCombatState(10);
 
     expect(state.phase).toBe('ready');
-    expect(state.maxEnemyHealth).toBe(8 * DEFAULT_BASE_DAMAGE);
+    expect(state.maxEnemyHealth).toBe(10);
     expect(state.playerShield).toBe(3);
   });
 
-  it('deals damage, builds combo, and records a fast critical hit', () => {
+  it('fells one monster per correct answer, builds combo, and records a fast critical hit', () => {
     const first = combatReducer(started(), {
       type: 'answer',
       answer: answer({ responseTimeMs: 3_000 }),
@@ -38,7 +37,7 @@ describe('combat engine', () => {
     const second = combatReducer(first, { type: 'answer', answer: answer() });
 
     expect(first.lastEvent).toMatchObject({ kind: 'hit', critical: true, combo: 1 });
-    expect(first.enemyHealth).toBe(first.maxEnemyHealth - 15);
+    expect(first.enemyHealth).toBe(first.maxEnemyHealth - 1);
     expect(second.combo).toBe(2);
     expect(second.bestCombo).toBe(2);
     expect(second.correctAnswers).toBe(2);

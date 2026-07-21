@@ -1,17 +1,17 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import {
   ArrowRight,
   CheckCircle2,
   Layers3,
   LoaderCircle,
-  Pause,
-  Play,
+  RefreshCw,
   Sparkles,
   Star,
   XCircle,
 } from '../icons';
 import type {
   AdaptiveStudyItem,
+  GameMode,
   GameSessionState,
   LearningStage,
   WordEntry,
@@ -19,6 +19,11 @@ import type {
 } from '../domain/models';
 import type { CombatState } from '../domain/combat';
 import { calculateStars, type LevelGameResult } from '../domain/gameProgress';
+import {
+  buildRarityIndex,
+  buildWaveMonsters,
+  type WaveMonsterInput,
+} from '../domain/monsterRoster';
 import {
   AUTO_ADVANCE_DELAY_MS,
   MODE_TIME_LIMITS,
@@ -28,9 +33,12 @@ import { BossQuestion } from './modes/BossQuestion';
 import { ChainSentenceBar } from './ChainSentenceBar';
 import { ChoiceQuestion } from './modes/ChoiceQuestion';
 import { ListeningQuestion } from './modes/ListeningQuestion';
+import { ListenWordQuestion } from './modes/ListenWordQuestion';
+import { MatchMeaningQuestion } from './modes/MatchMeaningQuestion';
+import { MatchWordQuestion } from './modes/MatchWordQuestion';
 import { SentenceQuestion } from './modes/SentenceQuestion';
-import { WordDefinitions } from './WordDefinitions';
-import { MemoryChainPreview } from './MemoryChainPreview';
+import { SenseList } from './WordDefinitions';
+import { parseDefinitionSenses } from '../domain/wordText';
 import type { CombatEnemyKind } from './CombatHud';
 import { BattleScene } from './BattleScene';
 
@@ -67,11 +75,15 @@ interface PracticeSessionProps {
     text: string;
   } | null;
   onAskAi: (word: WordEntry) => void;
-  assessmentWordIds: Set<string>;
-  onToggleAssessment: (wordId: string) => void;
+  aiConfigured: boolean;
+  missedWordIds: Set<string>;
   relatedBankNames: string[];
   wordMastered: boolean;
   wordProgress?: WordProgress;
+  hideMonsterWord: boolean;
+  hideAnswerCount: boolean;
+  boostCount: number;
+  timeScale: number;
   speechSupported: boolean;
   speechSpeaking: boolean;
   speechError: string;
@@ -80,11 +92,14 @@ interface PracticeSessionProps {
   onOpenSpeechSettings: () => void;
 }
 
-const MODE_META = {
+const MODE_META: Record<GameMode, string> = {
   listening: '听音拼写',
   choice: '释义选择',
   sentence: '释义填空',
   boss: '极限挑战',
+  'match-meaning': '识义选择',
+  'match-word': '中文辨形',
+  'listen-word': '听音辨词',
 };
 
 const STAGE_LABELS: Record<LearningStage, string> = {
@@ -121,11 +136,15 @@ export function PracticeSession({
   sessionPreparing,
   aiInsight,
   onAskAi,
-  assessmentWordIds,
-  onToggleAssessment,
+  aiConfigured,
+  missedWordIds,
   relatedBankNames,
   wordMastered,
   wordProgress,
+  hideMonsterWord,
+  hideAnswerCount,
+  boostCount,
+  timeScale,
   speechSupported,
   speechSpeaking,
   speechError,
@@ -136,14 +155,74 @@ export function PracticeSession({
   const mode = currentItem?.mode ?? 'choice';
   const modeName = MODE_META[mode];
   const questionNumber = Math.min(session.index + 1, session.queue.length);
-  const timerPercent = (remainingMs / MODE_TIME_LIMITS[mode]) * 100;
+  const timerPercent = (remainingMs / (MODE_TIME_LIMITS[mode] * timeScale)) * 100;
   const autoAdvancePercent = (autoAdvanceRemainingMs / AUTO_ADVANCE_DELAY_MS) * 100;
-  const autoAdvanceSeconds = Math.ceil(autoAdvanceRemainingMs / 1000);
-  const autoAdvanceTarget = session.index + 1 >= session.queue.length ? '查看结果' : '下一题';
   const revealedWordIds = getRevealedChainWordIds(session);
+  const rarityIndex = useMemo(() => buildRarityIndex(entries), [entries]);
+  // Once a question is answered, the vocabulary coach is generated automatically
+  // (only when a model is configured). Guarded so it fires just once per word.
+  const autoAiWordRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (session.phase !== 'answered') {
+      autoAiWordRef.current = null;
+      return;
+    }
+    if (!aiConfigured || !currentWord) return;
+    if (autoAiWordRef.current === currentWord.id) return;
+    autoAiWordRef.current = currentWord.id;
+    onAskAi(currentWord);
+  }, [session.phase, currentWord, aiConfigured, onAskAi]);
+  // Spacebar pauses / resumes the auto-advance countdown while reviewing.
+  useEffect(() => {
+    if (session.phase !== 'answered') return;
+    function handleKey(event: KeyboardEvent) {
+      if (event.code !== 'Space' && event.key !== ' ') return;
+      const target = event.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) return;
+      event.preventDefault();
+      onToggleAutoAdvance();
+    }
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [session.phase, onToggleAutoAdvance]);
+  const roster = buildWaveMonsters(
+    currentChainItems.map((item): WaveMonsterInput => ({
+      word: item.word,
+      status: session.phase === 'asking' && item.word.id === currentWord?.id
+        ? 'active'
+        : revealedWordIds.has(item.word.id)
+          ? (missedWordIds.has(item.word.id) ? 'missed' : 'defeated')
+          : 'pending',
+    })),
+    rarityIndex,
+  );
+  // The reading passage only appears when the AI actually wrote one; offline runs
+  // hide it entirely. It renders above the monsters inside BattleScene.
+  const aiPassage = currentChainItems[0]?.chainPassage;
+  const passageNode = currentWord && aiPassage?.source === 'ai'
+    ? (
+      <ChainSentenceBar
+        items={currentChainItems}
+        currentWordId={currentWord.id}
+        revealedWordIds={revealedWordIds}
+        missedWordIds={missedWordIds}
+      />
+    )
+    : undefined;
+  const zhSenses = currentWord ? parseDefinitionSenses(currentWord.definitionZh) : [];
+  const enSenses = currentWord ? parseDefinitionSenses(currentWord.definition) : [];
+  const [defLang, setDefLang] = useState<'zh' | 'en'>('zh');
+  const effectiveDefLang = defLang === 'en' && enSenses.length === 0 ? 'zh' : defLang;
+  const aiForWord = aiInsight && currentWord && aiInsight.wordId === currentWord.id
+    ? aiInsight
+    : null;
 
   function handleStartChain() {
-    if (speechSupported && currentItem?.mode === 'listening' && currentWord) {
+    const speaksOnStart = currentItem?.mode === 'listening'
+      || currentItem?.mode === 'match-meaning'
+      || currentItem?.mode === 'listen-word';
+    if (speechSupported && speaksOnStart && currentWord) {
       onSpeak(currentWord.word);
     }
     onStartChain();
@@ -238,25 +317,20 @@ export function PracticeSession({
           totalQuestions={session.queue.length}
           onExit={onExit}
           preview
-          contextPanel={(
-            <ChainSentenceBar
-              items={currentChainItems}
-              currentWordId={currentWord.id}
-              revealedWordIds={revealedWordIds}
-              compact
-            />
-          )}
+          roster={roster}
+          passage={passageNode}
+          onSpeak={onSpeak}
+          hideWord={hideMonsterWord}
+          boostCount={boostCount}
         >
-          <section className="question-card chain-preview-card">
-            <MemoryChainPreview
-              items={currentChainItems}
-              assessmentWordIds={assessmentWordIds}
-              isSpeechSupported={speechSupported}
-              onStart={handleStartChain}
-              onSpeak={onSpeak}
-              onToggleAssessment={onToggleAssessment}
-            />
-          </section>
+          <div className="battle-start-panel">
+            <p className="question-kicker">
+              本组 {currentChainItems.length} 只词怪已就位，{hideMonsterWord ? '目标词已隐藏' : '头顶即目标词'}
+            </p>
+            <button type="button" className="primary-button" onClick={handleStartChain}>
+              开始挑战 <ArrowRight aria-hidden="true" />
+            </button>
+          </div>
         </BattleScene>
       </main>
     );
@@ -272,22 +346,24 @@ export function PracticeSession({
         currentQuestion={questionNumber}
         totalQuestions={session.queue.length}
         onExit={onExit}
-        contextPanel={(
-          <ChainSentenceBar
-            items={currentChainItems}
-            currentWordId={currentWord.id}
-            revealedWordIds={revealedWordIds}
-          />
-        )}
+        roster={roster}
+        passage={passageNode}
+        onSpeak={onSpeak}
+        hideWord={hideMonsterWord}
+        boostCount={boostCount}
       >
         <section className="question-card" aria-live="polite">
-        <div className="timer-row">
-          <span>本题剩余</span>
-          <strong>{Math.ceil(remainingMs / 1000)} 秒</strong>
-        </div>
-        <div className="timer-track">
-          <span style={{ width: `${timerPercent}%` }} />
-        </div>
+        {session.phase === 'asking' && (
+          <>
+            <div className="timer-row">
+              <span>本题剩余</span>
+              <strong>{Math.ceil(remainingMs / 1000)} 秒</strong>
+            </div>
+            <div className="timer-track">
+              <span style={{ width: `${timerPercent}%` }} />
+            </div>
+          </>
+        )}
 
         {session.phase === 'asking' && (
           <div key={currentWord.id}>
@@ -313,103 +389,179 @@ export function PracticeSession({
             {mode === 'boss' && (
               <BossQuestion word={currentWord} onSubmit={onSubmit} />
             )}
+            {mode === 'match-meaning' && (
+              <MatchMeaningQuestion
+                word={currentWord}
+                entries={entries}
+                isSpeechSupported={speechSupported}
+                isSpeaking={speechSpeaking}
+                onSpeak={onSpeak}
+                onSubmit={onSubmit}
+                hideAnswerCount={hideAnswerCount}
+              />
+            )}
+            {mode === 'match-word' && (
+              <MatchWordQuestion word={currentWord} entries={entries} onSubmit={onSubmit} />
+            )}
+            {mode === 'listen-word' && (
+              <ListenWordQuestion
+                word={currentWord}
+                entries={entries}
+                isSpeechSupported={speechSupported}
+                isSpeaking={speechSpeaking}
+                speechError={speechError}
+                voiceName={speechVoiceName}
+                onSpeak={onSpeak}
+                onOpenSettings={onOpenSpeechSettings}
+                onSubmit={onSubmit}
+              />
+            )}
           </div>
         )}
 
         {session.phase === 'answered' && session.answer && (
           <div className={`answer-panel ${session.answer.correct ? 'is-correct' : 'is-wrong'}`}>
-            {session.answer.correct
-              ? <CheckCircle2 aria-hidden="true" />
-              : <XCircle aria-hidden="true" />}
-            <p className="answer-title">{session.answer.correct ? '回答正确' : '这次没想起来'}</p>
-            <p className="chain-position">
-              串联 {currentItem.chainPosition + 1} / {currentChainItems.length} · {STAGE_LABELS[currentItem.stage]}
-            </p>
-            <div className="answer-word-heading">
-              <strong>{currentWord.word} <small>{currentWord.phonetic}</small></strong>
-              {currentWord.partOfSpeech && (
-                <span className="word-pos">{currentWord.partOfSpeech}</span>
-              )}
-            </div>
-            <WordDefinitions word={currentWord} />
-            {!session.answer.correct && (
-              <p className="your-answer">你的答案：{session.answer.response || '未作答'}</p>
-            )}
-            {wordProgress && (
-              <div className="word-progress-summary" aria-label="本词学习进度">
-                <div><span>练习</span><strong>{wordProgress.attempts} 次</strong></div>
-                <div><span>答对</span><strong>{wordProgress.correct} 次</strong></div>
-                <div><span>历史正确率</span><strong>{wordProgress.mastery}%</strong></div>
-              </div>
-            )}
-            {relatedBankNames.length > 0 && (
-              <div className={`coverage-reward ${wordMastered ? 'is-mastered' : ''}`}>
-                <Layers3 aria-hidden="true" />
-                <div>
-                  <strong>
-                    {wordMastered ? '已进入稳定掌握' : '本次作答已更新复习计划'}
-                  </strong>
-                  <span>{relatedBankNames.join(' · ')}</span>
-                  {!wordMastered && <small>FSRS 会根据记忆稳定性安排下次复习</small>}
+            <div className="answer-columns">
+              <section className="answer-def-card" aria-labelledby="answer-def-count">
+                <div className="answer-def-word-head">
+                  <div className="answer-word-heading">
+                    <strong>{currentWord.word} <small>{currentWord.phonetic}</small></strong>
+                    {currentWord.partOfSpeech && (
+                      <span className="word-pos">{currentWord.partOfSpeech}</span>
+                    )}
+                  </div>
+                  {wordProgress && (
+                    <dl className="answer-stats-inline" aria-label="本词学习进度">
+                      <div><dt>练习</dt><dd>{wordProgress.attempts}</dd></div>
+                      <div><dt>答对</dt><dd>{wordProgress.correct}</dd></div>
+                      <div><dt>正确率</dt><dd>{wordProgress.mastery}%</dd></div>
+                    </dl>
+                  )}
                 </div>
-              </div>
-            )}
-            <div className={`auto-advance-panel ${autoAdvancePaused ? 'is-paused' : ''}`}>
-              <div className="auto-advance-heading">
-                <span aria-live="polite">
-                  {autoAdvancePaused
-                    ? '自动前进已暂停'
-                    : `${autoAdvanceSeconds} 秒后自动${autoAdvanceTarget}`}
-                </span>
-                <button type="button" onClick={onToggleAutoAdvance}>
-                  {autoAdvancePaused
-                    ? <><Play aria-hidden="true" /> 继续</>
-                    : <><Pause aria-hidden="true" /> 暂停</>}
-                </button>
-              </div>
-              <div
-                className="auto-advance-track"
-                role="progressbar"
-                aria-label={`自动${autoAdvanceTarget}倒计时`}
-                aria-valuemin={0}
-                aria-valuemax={AUTO_ADVANCE_DELAY_MS}
-                aria-valuenow={autoAdvanceRemainingMs}
-              >
-                <span style={{ width: `${autoAdvancePercent}%` }} />
-              </div>
-            </div>
-            <div className="answer-actions">
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={() => onAskAi(currentWord)}
-                disabled={aiInsight?.wordId === currentWord.id && aiInsight.status === 'loading'}
-              >
-                <Sparkles aria-hidden="true" />
-                {aiInsight?.wordId === currentWord.id && aiInsight.status === 'loading'
-                  ? '生成讲解中'
-                  : 'AI 讲解'}
-              </button>
-              <button type="button" className="primary-button" onClick={onNext}>
-                {session.index + 1 >= session.queue.length ? '立即查看结果' : '立即下一题'}
-                <ArrowRight aria-hidden="true" />
-              </button>
-            </div>
+                <div className="answer-card-head">
+                  <div className="answer-def-toggle" role="tablist" aria-label="释义语言">
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={effectiveDefLang === 'zh'}
+                      className={effectiveDefLang === 'zh' ? 'is-active' : ''}
+                      onClick={() => setDefLang('zh')}
+                    >
+                      中文
+                    </button>
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={effectiveDefLang === 'en'}
+                      className={effectiveDefLang === 'en' ? 'is-active' : ''}
+                      onClick={() => setDefLang('en')}
+                      disabled={enSenses.length === 0}
+                    >
+                      EN
+                    </button>
+                  </div>
+                  <span className="answer-def-count" id="answer-def-count">
+                    {effectiveDefLang === 'zh' ? `${zhSenses.length} 个义项` : `${enSenses.length} senses`}
+                  </span>
+                </div>
+                <div className="answer-def-body" lang={effectiveDefLang === 'en' ? 'en' : undefined}>
+                  <SenseList senses={effectiveDefLang === 'zh' ? zhSenses : enSenses} />
+                  {currentWord.example && (
+                    <blockquote className="answer-def-example" lang="en">
+                      <p>{currentWord.example}</p>
+                      {currentWord.exampleZh && <footer>{currentWord.exampleZh}</footer>}
+                    </blockquote>
+                  )}
+                </div>
+                {relatedBankNames.length > 0 && (
+                  <p className={`answer-bank-note ${wordMastered ? 'is-mastered' : ''}`}>
+                    <Layers3 aria-hidden="true" />
+                    <span>
+                      {wordMastered ? '已进入稳定掌握' : '本次作答已更新复习计划'}
+                      <em>收录于 {relatedBankNames.join(' · ')}</em>
+                    </span>
+                  </p>
+                )}
+              </section>
 
-            {aiInsight?.wordId === currentWord.id && aiInsight.status !== 'loading' && (
-              <div className={`ai-insight is-${aiInsight.status}`} aria-live="polite">
-                <div className="ai-insight-heading">
-                  <Sparkles aria-hidden="true" /><strong>AI 词汇教练</strong>
+              <section className="answer-ai-col" aria-labelledby="answer-ai-heading">
+                <div className="answer-ai-result">
+                  <div className="answer-result-lead">
+                    {session.answer.correct
+                      ? <CheckCircle2 aria-hidden="true" />
+                      : <XCircle aria-hidden="true" />}
+                    <div className="answer-result-text">
+                      <p className="answer-title">{session.answer.correct ? '回答正确' : '这次没想起来'}</p>
+                      <p className="chain-position">
+                        串联 {currentItem.chainPosition + 1} / {currentChainItems.length} · {STAGE_LABELS[currentItem.stage]}
+                      </p>
+                      {!session.answer.correct && (
+                        <p className="your-answer">你的答案：{session.answer.response || '未作答'}</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className={`answer-advance ${autoAdvancePaused ? 'is-paused' : ''}`}>
+                    <button
+                      type="button"
+                      className="primary-button answer-advance-next"
+                      onClick={onNext}
+                      style={{ ['--advance']: autoAdvancePercent } as CSSProperties}
+                    >
+                      {session.index + 1 >= session.queue.length ? '立即查看结果' : '立即下一题'}
+                      <ArrowRight aria-hidden="true" />
+                    </button>
+                    <span className="answer-advance-hint" aria-live="polite">
+                      {autoAdvancePaused ? '已暂停 · 按空格继续' : '按空格暂停计时'}
+                    </span>
+                  </div>
                 </div>
-                {aiInsight.status === 'success'
-                  ? (
-                    <Suspense fallback={<p className="markdown-loading">正在排版讲解...</p>}>
-                      <MarkdownContent content={aiInsight.text} />
+                <div className="answer-ai-head answer-card-head">
+                  <h3 id="answer-ai-heading"><Sparkles aria-hidden="true" /> AI 词汇教练</h3>
+                  {aiConfigured && (
+                    <button
+                      type="button"
+                      className="answer-ai-regen"
+                      onClick={() => onAskAi(currentWord)}
+                      disabled={aiForWord?.status === 'loading'}
+                      aria-label="重新生成讲解"
+                      title="重新生成讲解"
+                    >
+                      <RefreshCw
+                        aria-hidden="true"
+                        className={aiForWord?.status === 'loading' ? 'spin-icon' : ''}
+                      />
+                    </button>
+                  )}
+                </div>
+                <div className="answer-ai-body">
+                  {aiForWord?.status === 'success' && (
+                    <Suspense fallback={<p className="markdown-loading">正在排版讲解…</p>}>
+                      <MarkdownContent content={aiForWord.text} />
                     </Suspense>
-                  )
-                  : <p>{aiInsight.text}</p>}
-              </div>
-            )}
+                  )}
+                  {aiForWord?.status === 'error' && (
+                    <p className="answer-ai-hint is-error" aria-live="polite">{aiForWord.text}</p>
+                  )}
+                  {(aiForWord?.status === 'loading' || (!aiForWord && aiConfigured)) && (
+                    <p className="answer-ai-hint" aria-live="polite">
+                      <LoaderCircle aria-hidden="true" className="spin-icon" /> 正在生成讲解…
+                    </p>
+                  )}
+                  {!aiForWord && !aiConfigured && (
+                    <div className="answer-ai-empty">
+                      <p>连接本地或云端模型后，答题即可自动获得记忆钩子、用法与例句。</p>
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={() => onAskAi(currentWord)}
+                      >
+                        <Sparkles aria-hidden="true" /> 开启 AI 讲解
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </section>
+            </div>
           </div>
         )}
         </section>

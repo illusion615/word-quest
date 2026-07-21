@@ -5,6 +5,7 @@ interface ChainPassageBarProps {
   items: AdaptiveStudyItem[];
   currentWordId: string;
   revealedWordIds: ReadonlySet<string>;
+  missedWordIds?: ReadonlySet<string>;
   compact?: boolean;
 }
 
@@ -12,6 +13,7 @@ export function ChainSentenceBar({
   items,
   currentWordId,
   revealedWordIds,
+  missedWordIds,
   compact = false,
 }: ChainPassageBarProps) {
   const passage = items[0]?.chainPassage;
@@ -42,7 +44,8 @@ export function ChainSentenceBar({
       currentMarked = true;
       return <mark key={`${part}-${index}`} aria-current="true">{part}</mark>;
     }
-    return <span key={`${part}-${index}`} className="chain-target-word">{part}</span>;
+    const missed = missedWordIds?.has(wordId) ? ' is-missed' : '';
+    return <span key={`${part}-${index}`} className={`chain-target-word${missed}`}>{part}</span>;
   });
   const hiddenWordCount = new Set(
     targets.filter((target) => !revealedWordIds.has(target.id)).map((target) => target.id),

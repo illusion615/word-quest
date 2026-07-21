@@ -1,6 +1,6 @@
-import { useState, type ReactNode } from 'react';
-import { BookOpenCheck, X } from '../icons';
+import { type ReactNode } from 'react';
 import type { CombatState } from '../domain/combat';
+import type { WaveMonster } from '../domain/monsterRoster';
 import { CombatHud, type CombatEnemyKind } from './CombatHud';
 import { BattleHeader } from './BattleHeader';
 
@@ -12,9 +12,14 @@ interface BattleSceneProps {
   currentQuestion: number;
   totalQuestions: number;
   onExit: () => void;
-  contextPanel: ReactNode;
+  /** Reading passage rendered above the monsters. Omit to hide it (e.g. no AI). */
+  passage?: ReactNode;
   children: ReactNode;
   preview?: boolean;
+  roster?: WaveMonster[];
+  onSpeak?: (text: string) => void;
+  hideWord?: boolean;
+  boostCount?: number;
 }
 
 export function BattleScene({
@@ -25,14 +30,16 @@ export function BattleScene({
   currentQuestion,
   totalQuestions,
   onExit,
-  contextPanel,
+  passage,
   children,
   preview = false,
+  roster,
+  onSpeak,
+  hideWord = false,
+  boostCount = 0,
 }: BattleSceneProps) {
-  const [contextExpanded, setContextExpanded] = useState(false);
-
   return (
-    <section className={`battle-scene is-${enemyKind} ${preview ? 'is-preview' : 'is-assessment'}`}>
+    <section className={`battle-scene is-${enemyKind} ${preview ? 'is-preview' : 'is-asking'}`}>
       <div className="battle-scene-environment" aria-hidden="true">
         <span className="battle-horizon" />
         <span className="battle-floor" />
@@ -44,35 +51,11 @@ export function BattleScene({
         currentQuestion={currentQuestion}
         totalQuestions={totalQuestions}
         onExit={onExit}
+        boostCount={boostCount}
       />
-      <CombatHud state={state} levelNumber={levelNumber} enemyKind={enemyKind} />
-      {preview ? (
-        <div className="battle-glass-panel battle-context-panel">
-          {contextPanel}
-        </div>
-      ) : (
-        <aside className={`battle-context-drawer ${contextExpanded ? 'is-expanded' : ''}`}>
-          <button
-            type="button"
-            className="battle-context-toggle"
-            onClick={() => setContextExpanded((expanded) => !expanded)}
-            aria-expanded={contextExpanded}
-          >
-            {contextExpanded ? <X aria-hidden="true" /> : <BookOpenCheck aria-hidden="true" />}
-            <span>{contextExpanded ? '收起阅读' : '阅读理解'}</span>
-          </button>
-          {contextExpanded && (
-            <div className="battle-glass-panel battle-context-panel">
-              {contextPanel}
-            </div>
-          )}
-        </aside>
-      )}
-      <div className={preview
-        ? 'battle-action-panel battle-card-tray'
-        : 'battle-glass-panel battle-action-panel'}>
-        {children}
-      </div>
+      {passage && <div className="battle-passage-strip">{passage}</div>}
+      <CombatHud state={state} levelNumber={levelNumber} enemyKind={enemyKind} roster={roster} onSpeak={onSpeak} hideWord={hideWord} />
+      <div className="battle-action-panel">{children}</div>
     </section>
   );
 }

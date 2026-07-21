@@ -1,11 +1,11 @@
-import bossDefeated from '../assets/monsters/boss/defeated.png';
-import bossPhaseOne from '../assets/monsters/boss/phase-1.png';
-import bossPhaseTwo from '../assets/monsters/boss/phase-2.png';
-import bossPhaseThree from '../assets/monsters/boss/phase-3.png';
-import gruntAttack from '../assets/monsters/grunt/attack.png';
-import gruntDefeated from '../assets/monsters/grunt/defeated.png';
-import gruntHurt from '../assets/monsters/grunt/hurt.png';
-import gruntIdle from '../assets/monsters/grunt/idle.png';
+import bossDefeated from '../assets/monsters/boss/defeated.webp';
+import bossPhaseOne from '../assets/monsters/boss/phase-1.webp';
+import bossPhaseTwo from '../assets/monsters/boss/phase-2.webp';
+import bossPhaseThree from '../assets/monsters/boss/phase-3.webp';
+import gruntAttack from '../assets/monsters/grunt/attack.webp';
+import gruntDefeated from '../assets/monsters/grunt/defeated.webp';
+import gruntHurt from '../assets/monsters/grunt/hurt.webp';
+import gruntIdle from '../assets/monsters/grunt/idle.webp';
 import type { CombatState } from '../domain/combat';
 import type { MonsterPose } from './monsterPresentation';
 
@@ -28,6 +28,20 @@ function percentage(value: number, maximum: number): number {
 
 export function getMonsterArtworkSources(enemyKind: CombatEnemyKind): readonly string[] {
   return ARTWORK_BY_ENEMY[enemyKind];
+}
+
+/**
+ * Frame for a single roster monster by pose. Per-tier art is not shipped yet,
+ * so every tier reuses the grunt frames and difficulty is conveyed by CSS
+ * (scale + tint) until the artwork lands in src/assets/monsters/<tier>/.
+ */
+export function monsterPoseArtwork(pose: MonsterPose): { src: string; alt: string } {
+  if (pose === 'defeated' || pose === 'knockdown') {
+    return { src: gruntDefeated, alt: '被击败的词怪' };
+  }
+  if (pose === 'attacking') return { src: gruntAttack, alt: '正在攻击的词怪' };
+  if (pose === 'hit' || pose === 'recovering') return { src: gruntHurt, alt: '受创的词怪' };
+  return { src: gruntIdle, alt: '词怪' };
 }
 
 export function resolveMonsterArtwork(

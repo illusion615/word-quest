@@ -32,6 +32,25 @@ export const DEFAULT_NEW_WORD_LIMIT = 8;
 
 export type StudyPriority = 'due' | 'new';
 
+/**
+ * How hard the newly introduced words should be. Banks are frequency-sorted
+ * (common first), so this just reorders unseen words: relaxed keeps the easiest
+ * common words up front, hardcore leads with the rarest in-level vocabulary.
+ */
+export type ChallengeDifficulty = 'relaxed' | 'standard' | 'hardcore';
+
+function orderUnseenByDifficulty(
+  unseen: WordEntry[],
+  difficulty: ChallengeDifficulty,
+  bankId?: BankId,
+): WordEntry[] {
+  if (!bankId || difficulty === 'relaxed') return unseen;
+  const atLevel = unseen.filter((entry) => !isBelowBankLevel(entry, bankId));
+  const below = unseen.filter((entry) => isBelowBankLevel(entry, bankId));
+  const leadingAtLevel = difficulty === 'hardcore' ? [...atLevel].reverse() : atLevel;
+  return [...leadingAtLevel, ...below];
+}
+
 export interface StudyCandidate {
   word: WordEntry;
   priority: StudyPriority;
@@ -145,6 +164,7 @@ export function buildStudyCandidates(
   now = new Date(),
   bankId?: BankId,
   newWordLimit = DEFAULT_NEW_WORD_LIMIT,
+  difficulty: ChallengeDifficulty = 'standard',
 ): StudyCandidate[] {
   const due = entries
     .filter((entry) => isReviewDue(state.progress[entry.id], now))
@@ -159,11 +179,7 @@ export function buildStudyCandidates(
       return leftDue.localeCompare(rightDue);
     });
   const unseen = entries.filter((entry) => !state.progress[entry.id]);
-  const orderedUnseen = bankId
-    ? [...unseen].sort((left, right) => (
-      Number(isBelowBankLevel(left, bankId)) - Number(isBelowBankLevel(right, bankId))
-    ))
-    : unseen;
+  const orderedUnseen = orderUnseenByDifficulty(unseen, difficulty, bankId);
   const limitedUnseen = orderedUnseen.slice(0, Math.max(0, Math.floor(newWordLimit)));
 
   return [

@@ -103,8 +103,8 @@ describe('AI client', () => {
       const body = JSON.parse(String(request?.body));
       const systemPrompt = body.messages[0].content;
       expect(systemPrompt).toContain('GitHub-flavored Markdown');
-      expect(systemPrompt).toContain('exactly three level-3 headings');
-      expect(systemPrompt).toContain('do not output raw HTML');
+      expect(systemPrompt).toContain('exactly three level-3');
+      expect(systemPrompt).toContain('raw HTML');
       expect(systemPrompt).toContain('Respond in Japanese.');
     } finally {
       vi.unstubAllGlobals();

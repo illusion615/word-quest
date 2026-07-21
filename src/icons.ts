@@ -7,7 +7,9 @@ export { default as CheckCircle2 } from 'lucide-react/dist/esm/icons/circle-chec
 export { default as Clock3 } from 'lucide-react/dist/esm/icons/clock-3.mjs';
 export { default as Crown } from 'lucide-react/dist/esm/icons/crown.mjs';
 export { default as ExternalLink } from 'lucide-react/dist/esm/icons/external-link.mjs';
+export { default as EyeOff } from 'lucide-react/dist/esm/icons/eye-off.mjs';
 export { default as Flame } from 'lucide-react/dist/esm/icons/flame.mjs';
+export { default as Hash } from 'lucide-react/dist/esm/icons/hash.mjs';
 export { default as Headphones } from 'lucide-react/dist/esm/icons/headphones.mjs';
 export { default as Info } from 'lucide-react/dist/esm/icons/info.mjs';
 export { default as KeyRound } from 'lucide-react/dist/esm/icons/key-round.mjs';

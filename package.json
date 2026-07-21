@@ -8,6 +8,7 @@
     "data:build": "node scripts/build-exam-banks.mjs",
     "data:verify": "node scripts/verify-exam-banks.mjs",
     "ai:proxy": "node scripts/llm-cors-proxy.mjs",
+    "assets:optimize": "node scripts/optimize-art.mjs",
     "build": "tsc -b && vite build",
     "lint": "oxlint src",
     "test": "vitest run",

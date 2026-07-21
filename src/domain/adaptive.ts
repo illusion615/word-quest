@@ -13,6 +13,7 @@ import type {
 import { State } from 'ts-fsrs';
 import {
   buildStudyCandidates,
+  type ChallengeDifficulty,
   type StudyCandidate,
 } from './progress';
 
@@ -55,16 +56,21 @@ export function getAdaptiveStage(
   progress: WordProgress | undefined,
   capabilities: StudyCapabilities = DEFAULT_STUDY_CAPABILITIES,
 ): AdaptiveStage {
-  if (!progress) return { stage: 'new', mode: 'choice', label: '建立识别' };
+  // New / still-learning words face the easiest recognition: the word is shown
+  // and read aloud, and the learner picks its meaning(s).
+  if (!progress) return { stage: 'new', mode: 'match-meaning', label: '识义建立' };
   if (progress.card.state === State.Learning || progress.card.state === State.Relearning) {
-    return capabilities.speechPlayback
-      ? { stage: 'sound', mode: 'listening', label: '巩固音形' }
-      : { stage: 'sound', mode: 'choice', label: '巩固词义' };
+    return { stage: 'sound', mode: 'match-meaning', label: '巩固识义' };
   }
+  // A steadier word flips the prompt: given the Chinese meaning, pick the word.
   if (progress.card.stability < ACTIVE_RECALL_STABILITY_DAYS) {
-    return { stage: 'context', mode: 'sentence', label: '放入语境' };
+    return { stage: 'context', mode: 'match-word', label: '中文辨形' };
   }
-  return { stage: 'recall', mode: 'boss', label: '快速提取' };
+  // The most stable words demand pure listening recall; without speech we fall
+  // back to the meaning-to-word form.
+  return capabilities.speechPlayback
+    ? { stage: 'recall', mode: 'listen-word', label: '听音提取' }
+    : { stage: 'recall', mode: 'match-word', label: '辨形提取' };
 }
 
 function candidateStage(candidate: StudyCandidate, state: LearningState): LearningStage {
@@ -101,8 +107,9 @@ function buildCandidatePool(
   state: LearningState,
   now: Date,
   bankId?: BankId,
+  difficulty: ChallengeDifficulty = 'standard',
 ): StudyCandidate[] {
-  const candidates = buildStudyCandidates(entries, state, now, bankId);
+  const candidates = buildStudyCandidates(entries, state, now, bankId, undefined, difficulty);
   return (['due', 'new'] as const).flatMap((priority) => (
     candidates.filter((candidate) => candidate.priority === priority).slice(0, CANDIDATES_PER_PRIORITY)
   ));
@@ -119,8 +126,9 @@ export function buildChainBlueprints(
   chainCount = DEFAULT_CHAIN_COUNT,
   now = new Date(),
   bankId?: BankId,
+  difficulty: ChallengeDifficulty = 'standard',
 ): ChainBlueprint[] {
-  const remaining = buildCandidatePool(entries, state, now, bankId);
+  const remaining = buildCandidatePool(entries, state, now, bankId, difficulty);
   const blueprints: ChainBlueprint[] = [];
 
   while (blueprints.length < chainCount && remaining.length > 0) {

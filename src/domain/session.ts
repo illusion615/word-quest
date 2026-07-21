@@ -18,6 +18,9 @@ export const MODE_TIME_LIMITS: Record<GameMode, number> = {
   choice: 15_000,
   sentence: 20_000,
   boss: 10_000,
+  'match-meaning': 18_000,
+  'match-word': 15_000,
+  'listen-word': 15_000,
 };
 
 export const AUTO_ADVANCE_DELAY_MS = 3_000;
@@ -41,6 +44,7 @@ export function createGameSession(
 export function startChainGroup(
   state: GameSessionState,
   now = Date.now(),
+  timeScale = 1,
 ): GameSessionState {
   if (state.phase !== 'preview') return state;
   const item = state.queue[state.index];
@@ -49,7 +53,7 @@ export function startChainGroup(
     ...state,
     phase: 'asking',
     questionStartedAt: now,
-    deadline: now + MODE_TIME_LIMITS[item.mode],
+    deadline: now + MODE_TIME_LIMITS[item.mode] * timeScale,
   };
 }
 
@@ -91,27 +95,35 @@ export function getRevealedChainWordIds(state: GameSessionState): Set<string> {
 export function replaceUnavailableListening(
   state: GameSessionState,
   now = Date.now(),
+  timeScale = 1,
 ): GameSessionState {
+  const needsSpeech = (mode: AdaptiveStudyItem['mode']) => (
+    mode === 'listening' || mode === 'listen-word'
+  );
+  const fallbackFor = (mode: AdaptiveStudyItem['mode']) => (
+    mode === 'listening' ? ('choice' as const) : ('match-word' as const)
+  );
   let changed = false;
-  const currentWasListening = state.queue[state.index]?.mode === 'listening';
+  const currentWasSpoken = needsSpeech(state.queue[state.index]?.mode ?? 'choice');
   const queue = state.queue.map((item, index) => {
-    if (index < state.index || item.mode !== 'listening') return item;
+    if (index < state.index || !needsSpeech(item.mode)) return item;
     changed = true;
-    return { ...item, mode: 'choice' as const };
+    return { ...item, mode: fallbackFor(item.mode) };
   });
   if (!changed) return state;
-  if (state.phase !== 'asking' || !currentWasListening) return { ...state, queue };
+  if (state.phase !== 'asking' || !currentWasSpoken) return { ...state, queue };
   return {
     ...state,
     queue,
     questionStartedAt: now,
-    deadline: now + MODE_TIME_LIMITS.choice,
+    deadline: now + MODE_TIME_LIMITS.choice * timeScale,
   };
 }
 
 export function advanceSession(
   state: GameSessionState,
   now = Date.now(),
+  timeScale = 1,
 ): GameSessionState {
   if (state.phase !== 'answered') return state;
   const nextIndex = state.index + 1;
@@ -129,7 +141,7 @@ export function advanceSession(
     phase: startsNewChain ? 'preview' : 'asking',
     answer: null,
     questionStartedAt: now,
-    deadline: startsNewChain ? now : now + MODE_TIME_LIMITS[nextItem.mode],
+    deadline: startsNewChain ? now : now + MODE_TIME_LIMITS[nextItem.mode] * timeScale,
   };
 }
 

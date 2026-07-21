@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Moon, Sparkles, Sun, Volume2 } from './icons';
-import logoEnglish from './assets/logo-english.png';
+import logoEnglish from './assets/logo-english.webp';
 import { AiSettingsDialog } from './components/AiSettingsDialog';
 import { BattleRecord } from './components/BattleRecord';
 import { Dashboard } from './components/Dashboard';
 import { PracticeSession } from './components/PracticeSession';
-import { SkillDraft } from './components/SkillDraft';
+import { ChallengePrep } from './components/ChallengePrep';
 import { SpeechSettingsDialog } from './components/SpeechSettingsDialog';
 import { WORD_BANKS } from './data/bankRepository';
 import {
@@ -24,6 +24,19 @@ import {
 } from './domain/journey';
 import { getClearedLevelNumberSet } from './domain/gameProgress';
 import type { AdaptiveStudyItem, BankId, WordEntry } from './domain/models';
+import type { ChallengeDifficulty } from './domain/progress';
+import {
+  applyBoost,
+  boostCount,
+  boostEffects,
+  boostName,
+  drawBoostOffers,
+  dropRandomBoost,
+  sanitizeActiveBoosts,
+  type ActiveBoosts,
+  type BoostDef,
+  type BoostId,
+} from './domain/challengeBoosts';
 import { useAiConnection } from './hooks/useAiConnection';
 import { useBankCoverage } from './hooks/useBankCoverage';
 import { useCombat } from './hooks/useCombat';
@@ -46,9 +59,40 @@ function currentTheme(): Theme {
   return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
 }
 
+const DIFFICULTY_KEY = 'wordbuddy.challenge.difficulty.v1';
+const BOOSTS_KEY = 'wordbuddy.challenge.boosts.v1';
+
+function loadDifficulty(): ChallengeDifficulty {
+  if (typeof window === 'undefined') return 'standard';
+  const raw = window.localStorage.getItem(DIFFICULTY_KEY);
+  return raw === 'relaxed' || raw === 'hardcore' ? raw : 'standard';
+}
+
+function loadBoosts(): ActiveBoosts {
+  if (typeof window === 'undefined') return {};
+  try {
+    return sanitizeActiveBoosts(JSON.parse(window.localStorage.getItem(BOOSTS_KEY) ?? '{}'));
+  } catch {
+    return {};
+  }
+}
+
+function persistBoosts(next: ActiveBoosts): void {
+  try {
+    window.localStorage.setItem(BOOSTS_KEY, JSON.stringify(next));
+  } catch {
+    // Storage may be unavailable; the in-memory boosts still apply this session.
+  }
+}
+
 export default function WordBuddyApp() {
   const [selectedBank, setSelectedBank] = useState<BankId>('gaokao');
   const [theme, setTheme] = useState<Theme>(currentTheme);
+  const [difficulty, setDifficulty] = useState<ChallengeDifficulty>(loadDifficulty);
+  const [activeBoosts, setActiveBoosts] = useState<ActiveBoosts>(loadBoosts);
+  const [boostOffers, setBoostOffers] = useState<BoostDef[]>([]);
+  const [droppedBoostName, setDroppedBoostName] = useState<string | null>(null);
+  const [pendingBoostPenalty, setPendingBoostPenalty] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [speechSettingsOpen, setSpeechSettingsOpen] = useState(false);
   const [sessionPreparing, setSessionPreparing] = useState(false);
@@ -83,6 +127,7 @@ export default function WordBuddyApp() {
   const gameProgress = useGameProgress();
   const recordBattle = gameProgress.recordBattle;
   const finishCombat = combat.finishCombat;
+  const boostFx = boostEffects(activeBoosts);
   const {
     session,
     currentItem,
@@ -98,13 +143,13 @@ export default function WordBuddyApp() {
     toggleAutoAdvance,
     finishSession,
     stopSession,
-    assessmentWordIds,
-    toggleWordAssessment,
+    missedWordIds,
   } = useGameSession(
     addAnswer,
     clearAiInsight,
     combat.resolveAnswer,
     speech.isPlaybackAvailable,
+    boostFx.timeScale,
   );
   const sessionActive = session !== null;
   const previousSessionActive = useRef(sessionActive);
@@ -120,6 +165,14 @@ export default function WordBuddyApp() {
       finishCombat();
     }
   }, [combat.state.phase, finishCombat, session?.phase]);
+
+  // Answering anything wrong this level arms a penalty that removes one random
+  // boost the next time the player prepares for battle.
+  useEffect(() => {
+    if (session?.phase === 'complete' && missedWordIds.size > 0) {
+      setPendingBoostPenalty(true);
+    }
+  }, [session?.phase, missedWordIds]);
 
   useLayoutEffect(() => {
     if (previousSessionActive.current === sessionActive) return;
@@ -210,6 +263,7 @@ export default function WordBuddyApp() {
       DEFAULT_CHAIN_COUNT,
       new Date(),
       selectedBank,
+      difficulty,
     );
     const plan: AdaptiveStudyItem[] = [];
 
@@ -263,6 +317,18 @@ export default function WordBuddyApp() {
     }
 
     if (preparationIdRef.current === preparationId && plan.length > 0) {
+      let boosts = activeBoosts;
+      if (pendingBoostPenalty) {
+        const penalty = dropRandomBoost(activeBoosts);
+        boosts = penalty.next;
+        setActiveBoosts(boosts);
+        persistBoosts(boosts);
+        setDroppedBoostName(penalty.dropped ? boostName(penalty.dropped) : null);
+      } else {
+        setDroppedBoostName(null);
+      }
+      setPendingBoostPenalty(false);
+      setBoostOffers(drawBoostOffers(boosts, 3));
       gameProgress.beginBattle();
       combat.prepareCombat(plan.length);
       startSession(plan);
@@ -272,6 +338,24 @@ export default function WordBuddyApp() {
   function handleSelectBank(bankId: BankId) {
     challengeLevelIndexRef.current = null;
     setSelectedBank(bankId);
+  }
+
+  function handleSelectDifficulty(next: ChallengeDifficulty) {
+    setDifficulty(next);
+    try {
+      window.localStorage.setItem(DIFFICULTY_KEY, next);
+    } catch {
+      // Storage may be unavailable; the in-memory choice still applies this session.
+    }
+  }
+
+  function handleChooseBoost(boostId: BoostId) {
+    const next = applyBoost(activeBoosts, boostId);
+    setActiveBoosts(next);
+    persistBoosts(next);
+    setDroppedBoostName(null);
+    // Combat scoring keeps a neutral default tactic; difficulty now comes from boosts.
+    combat.chooseSkill('steady');
   }
 
   function handleLevelCompleteAction() {
@@ -368,6 +452,17 @@ export default function WordBuddyApp() {
             onRetryCoverage={retryCoverage}
           />
           <div className="header-actions">
+            <select
+              className="difficulty-select"
+              value={difficulty}
+              onChange={(event) => handleSelectDifficulty(event.target.value as ChallengeDifficulty)}
+              aria-label="挑战度（新词生ԏ度）"
+              title="挑战度：控制新词的生ԏ难度"
+            >
+              <option value="relaxed">轻松</option>
+              <option value="standard">标准</option>
+              <option value="hardcore">硬核</option>
+            </select>
             <span className="today-count">今日 {stats.today} 题</span>
             <button
               type="button"
@@ -402,9 +497,12 @@ export default function WordBuddyApp() {
       )}
 
       {session && combat.state.phase === 'ready' ? (
-        <SkillDraft
+        <ChallengePrep
           levelNumber={challengeLevelIndex + 1}
-          onChoose={combat.chooseSkill}
+          activeBoosts={activeBoosts}
+          offers={boostOffers}
+          droppedBoostName={droppedBoostName}
+          onChoose={handleChooseBoost}
           onExit={handleStopSession}
         />
       ) : session ? (
@@ -435,11 +533,15 @@ export default function WordBuddyApp() {
           sessionPreparing={sessionPreparing}
           aiInsight={aiInsight}
           onAskAi={handleAiRequest}
-          assessmentWordIds={assessmentWordIds}
-          onToggleAssessment={toggleWordAssessment}
+          aiConfigured={aiConfigured}
+          missedWordIds={missedWordIds}
           relatedBankNames={currentWordBankNames}
           wordMastered={currentWordMastered}
           wordProgress={currentWordProgress}
+          hideMonsterWord={boostFx.hideMonsterWord}
+          hideAnswerCount={boostFx.hideAnswerCount}
+          boostCount={boostCount(activeBoosts)}
+          timeScale={boostFx.timeScale}
           speechSupported={speech.isPlaybackAvailable}
           speechSpeaking={speech.isSpeaking}
           speechError={speech.error}

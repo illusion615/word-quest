@@ -21,6 +21,41 @@ function answer(wordId: string, correct: boolean, answeredAt: string): AnswerRec
   };
 }
 
+describe('challenge difficulty selection', () => {
+  const makeWord = (id: string, sourceTags: string[]): WordEntry => ({
+    id,
+    word: id,
+    phonetic: '',
+    partOfSpeech: 'noun',
+    definition: 'x',
+    definitionZh: 'x',
+    banks: ['gaokao'],
+    sourceTags,
+  });
+  // alpha/bravo are in-level (reach cet4/cet6); charlie is below the 高考 level.
+  const entries = [
+    makeWord('alpha', ['gk', 'cet6']),
+    makeWord('bravo', ['gk', 'cet4']),
+    makeWord('charlie', ['gk']),
+  ];
+  const now = new Date('2026-07-19T10:00:00.000Z');
+  const state = createEmptyLearningState();
+  const ids = (difficulty: 'relaxed' | 'standard' | 'hardcore') =>
+    buildStudyCandidates(entries, state, now, 'gaokao', 8, difficulty).map((c) => c.word.id);
+
+  it('standard keeps in-level words common-first with below-level last', () => {
+    expect(ids('standard')).toEqual(['alpha', 'bravo', 'charlie']);
+  });
+
+  it('hardcore leads with the rarest in-level words', () => {
+    expect(ids('hardcore')).toEqual(['bravo', 'alpha', 'charlie']);
+  });
+
+  it('relaxed keeps the raw common-first order', () => {
+    expect(ids('relaxed')).toEqual(['alpha', 'bravo', 'charlie']);
+  });
+});
+
 describe('word fixture', () => {
   it('contains complete, unique entries for domain tests', () => {
     expect(new Set(TEST_WORDS.map((entry) => entry.id)).size).toBe(TEST_WORDS.length);

@@ -92,13 +92,14 @@ export function createCombatState(
   questionCount: number,
   options: CombatOptions = {},
 ): CombatState {
-  const baseDamage = clampPositiveInteger(options.baseDamage ?? DEFAULT_BASE_DAMAGE, DEFAULT_BASE_DAMAGE);
   const maxPlayerShield = clampPositiveInteger(
     options.playerShield ?? DEFAULT_PLAYER_SHIELD,
     DEFAULT_PLAYER_SHIELD,
   );
   const expectedQuestions = clampPositiveInteger(questionCount, 1);
-  const maxEnemyHealth = Math.max(baseDamage, Math.ceil(expectedQuestions * baseDamage * 0.8));
+  // One monster per question; the roster is cleared by facing every monster and
+  // surviving, not by draining a shared health bar.
+  const maxEnemyHealth = expectedQuestions;
 
   return {
     phase: 'ready',
@@ -178,10 +179,14 @@ export function combatReducer(state: CombatState, action: CombatAction): CombatS
       const defeated = playerShield === 0;
       const protectCombo = state.skillId === 'steady' && !state.skillTriggered;
       const combo = protectCombo ? state.combo : 0;
+      // A missed monster still leaves the field (its turn passes), so the roster
+      // advances even though the learner took the hit.
+      const enemyHealth = Math.max(0, state.enemyHealth - 1);
       return {
         ...state,
         phase: defeated ? 'defeat' : 'fighting',
         playerShield,
+        enemyHealth,
         combo,
         skillTriggered: state.skillTriggered || protectCombo,
         answersResolved,
@@ -190,14 +195,15 @@ export function combatReducer(state: CombatState, action: CombatAction): CombatS
           damage: 0,
           critical: false,
           combo,
-          enemyDefeated: state.enemyHealth === 0,
+          enemyDefeated: enemyHealth === 0,
         }, playerShield),
       };
     }
 
     const combo = state.combo + 1;
     const { damage, critical } = calculateDamage(action.answer, combo, state.skillId);
-    const enemyHealth = Math.max(0, state.enemyHealth - damage);
+    // Each correct answer fells exactly one monster; damage only drives score juice.
+    const enemyHealth = Math.max(0, state.enemyHealth - 1);
     return {
       ...state,
       enemyHealth,

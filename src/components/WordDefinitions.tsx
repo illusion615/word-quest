@@ -9,7 +9,7 @@ interface SenseListProps {
   senses: DefinitionSense[];
 }
 
-function SenseList({ senses }: SenseListProps) {
+export function SenseList({ senses }: SenseListProps) {
   return (
     <ol className="definition-senses">
       {senses.map((sense, index) => (
@@ -24,28 +24,47 @@ function SenseList({ senses }: SenseListProps) {
   );
 }
 
+interface DefinitionColumnProps {
+  id: string;
+  title: string;
+  countLabel: string;
+  senses: DefinitionSense[];
+  lang?: string;
+}
+
+export function DefinitionColumn({ id, title, countLabel, senses, lang }: DefinitionColumnProps) {
+  return (
+    <section className="definition-section" lang={lang} aria-labelledby={id}>
+      <div className="definition-heading">
+        <h3 id={id}>{title}</h3>
+        <span>{countLabel}</span>
+      </div>
+      <SenseList senses={senses} />
+    </section>
+  );
+}
+
 export function WordDefinitions({ word }: WordDefinitionsProps) {
   const chineseSenses = parseDefinitionSenses(word.definitionZh);
   const englishSenses = parseDefinitionSenses(word.definition);
 
   return (
     <div className="word-definitions">
-      <section className="definition-section" aria-labelledby="definition-zh-heading">
-        <div className="definition-heading">
-          <h3 id="definition-zh-heading">中文释义</h3>
-          <span>{chineseSenses.length} 个义项</span>
-        </div>
-        <SenseList senses={chineseSenses} />
-      </section>
+      <DefinitionColumn
+        id="definition-zh-heading"
+        title="中文释义"
+        countLabel={`${chineseSenses.length} 个义项`}
+        senses={chineseSenses}
+      />
 
       {englishSenses.length > 0 && (
-        <section className="definition-section" lang="en" aria-labelledby="definition-en-heading">
-          <div className="definition-heading">
-            <h3 id="definition-en-heading">English definitions</h3>
-            <span>{englishSenses.length} senses</span>
-          </div>
-          <SenseList senses={englishSenses} />
-        </section>
+        <DefinitionColumn
+          id="definition-en-heading"
+          title="English definitions"
+          countLabel={`${englishSenses.length} senses`}
+          senses={englishSenses}
+          lang="en"
+        />
       )}
 
       {word.example && (

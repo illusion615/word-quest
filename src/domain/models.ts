@@ -5,7 +5,14 @@ export type BankId =
   | 'ielts'
   | 'toefl';
 
-export type GameMode = 'listening' | 'choice' | 'sentence' | 'boss';
+export type GameMode =
+  | 'listening'
+  | 'choice'
+  | 'sentence'
+  | 'boss'
+  | 'match-meaning'
+  | 'match-word'
+  | 'listen-word';
 
 export type LearningStage = 'new' | 'sound' | 'context' | 'recall';
 

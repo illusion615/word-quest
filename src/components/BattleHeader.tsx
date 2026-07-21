@@ -8,6 +8,7 @@ interface BattleHeaderProps {
   currentQuestion: number;
   totalQuestions: number;
   onExit: () => void;
+  boostCount?: number;
 }
 
 function percentage(value: number, maximum: number): number {
@@ -21,8 +22,8 @@ export function BattleHeader({
   currentQuestion,
   totalQuestions,
   onExit,
+  boostCount = 0,
 }: BattleHeaderProps) {
-  const enemyPercentage = percentage(state.enemyHealth, state.maxEnemyHealth);
   const questionPercentage = percentage(currentQuestion, totalQuestions);
   const selectedSkill = COMBAT_SKILLS.find((skill) => skill.id === state.skillId);
 
@@ -52,21 +53,7 @@ export function BattleHeader({
       <div className={`combo-status ${state.combo >= 2 ? 'is-active' : ''}`}>
         <Zap aria-hidden="true" />
         <strong>{state.combo}</strong>
-        <span>连击{selectedSkill ? ` · ${selectedSkill.name}` : ''}</span>
-      </div>
-
-      <div className="enemy-status">
-        <div><span>词怪生命</span><strong>{state.enemyHealth} / {state.maxEnemyHealth}</strong></div>
-        <div
-          className="enemy-health"
-          role="progressbar"
-          aria-label="词怪生命"
-          aria-valuemin={0}
-          aria-valuemax={state.maxEnemyHealth}
-          aria-valuenow={state.enemyHealth}
-        >
-          <span style={{ width: `${enemyPercentage}%` }} />
-        </div>
+        <span>连击{boostCount > 0 ? ` · 加成×${boostCount}` : (selectedSkill ? ` · ${selectedSkill.name}` : '')}</span>
       </div>
 
       <button type="button" className="battle-exit-button" onClick={onExit} aria-label="退出本轮">

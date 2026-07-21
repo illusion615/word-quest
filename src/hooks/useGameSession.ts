@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type {
   AdaptiveStudyItem,
   AnswerRecord,
@@ -19,7 +19,7 @@ import {
 } from '../domain/session';
 
 function correctAnswerFor(mode: GameMode, word: WordEntry): string {
-  return mode === 'choice' ? word.definitionZh : word.word;
+  return mode === 'choice' || mode === 'match-meaning' ? word.definitionZh : word.word;
 }
 
 export function useGameSession(
@@ -27,12 +27,14 @@ export function useGameSession(
   onAdvance: () => void,
   onAnswerResolved?: (event: ResolvedAnswerEvent) => void,
   speechPlaybackAvailable = true,
+  timeScale = 1,
 ) {
   const [session, setSession] = useState<GameSessionState | null>(null);
   const [now, setNow] = useState(Date.now());
   const [autoAdvanceRemainingMs, setAutoAdvanceRemainingMs] = useState(AUTO_ADVANCE_DELAY_MS);
   const [autoAdvancePaused, setAutoAdvancePaused] = useState(false);
   const [assessmentWordIds, setAssessmentWordIds] = useState<Set<string>>(() => new Set());
+  const [results, setResults] = useState<Record<string, boolean>>({});
 
   // Runtime capabilities are applied at serve time as well as persisted into the
   // queue so a voice failure cannot expose even one render of an unusable task.
@@ -45,6 +47,9 @@ export function useGameSession(
       if (!speechPlaybackAvailable && item.mode === 'listening') {
         return { ...item, mode: 'choice' };
       }
+      if (!speechPlaybackAvailable && item.mode === 'listen-word') {
+        return { ...item, mode: 'match-word' };
+      }
       return item;
     },
     [assessmentWordIds, speechPlaybackAvailable],
@@ -56,26 +61,27 @@ export function useGameSession(
     setAutoAdvanceRemainingMs(AUTO_ADVANCE_DELAY_MS);
     setAutoAdvancePaused(false);
     setAssessmentWordIds(new Set());
+    setResults({});
     const nextSession = createGameSession(queue, startedAt);
     setSession(speechPlaybackAvailable
       ? nextSession
-      : replaceUnavailableListening(nextSession, startedAt));
-  }, [speechPlaybackAvailable]);
+      : replaceUnavailableListening(nextSession, startedAt, timeScale));
+  }, [speechPlaybackAvailable, timeScale]);
 
   useEffect(() => {
     if (speechPlaybackAvailable) return;
     const timestamp = Date.now();
     setNow(timestamp);
     setSession((current) => current
-      ? replaceUnavailableListening(current, timestamp)
+      ? replaceUnavailableListening(current, timestamp, timeScale)
       : current);
-  }, [speechPlaybackAvailable]);
+  }, [speechPlaybackAvailable, timeScale]);
 
   const startChain = useCallback(() => {
     const startedAt = Date.now();
     setNow(startedAt);
-    setSession((current) => current ? startChainGroup(current, startedAt) : current);
-  }, []);
+    setSession((current) => current ? startChainGroup(current, startedAt, timeScale) : current);
+  }, [timeScale]);
 
   const submitAnswer = useCallback((
     correct: boolean,
@@ -109,17 +115,18 @@ export function useGameSession(
       response,
       correctAnswer: correctAnswer ?? correctAnswerFor(mode, word),
     }));
+    setResults((previous) => ({ ...previous, [word.id]: correct }));
     setAutoAdvanceRemainingMs(AUTO_ADVANCE_DELAY_MS);
     setAutoAdvancePaused(false);
   }, [applyRuntimeOverrides, onAnswerResolved, onRecord, session]);
 
   const nextQuestion = useCallback(() => {
     onAdvance();
-    setSession((current) => current ? advanceSession(current, Date.now()) : current);
+    setSession((current) => current ? advanceSession(current, Date.now(), timeScale) : current);
     setNow(Date.now());
     setAutoAdvanceRemainingMs(AUTO_ADVANCE_DELAY_MS);
     setAutoAdvancePaused(false);
-  }, [onAdvance]);
+  }, [onAdvance, timeScale]);
 
   useEffect(() => {
     if (!session || session.phase !== 'asking') return undefined;
@@ -179,10 +186,15 @@ export function useGameSession(
     setAutoAdvanceRemainingMs(AUTO_ADVANCE_DELAY_MS);
     setAutoAdvancePaused(false);
     setAssessmentWordIds(new Set());
+    setResults({});
   }, []);
 
   const currentItem = applyRuntimeOverrides(session?.queue[session.index] ?? null);
   const currentWord = currentItem?.word ?? null;
+  const missedWordIds = useMemo(
+    () => new Set(Object.entries(results).filter(([, ok]) => !ok).map(([id]) => id)),
+    [results],
+  );
   const remainingMs = session?.phase === 'asking'
     ? Math.max(0, session.deadline - now)
     : 0;
@@ -195,6 +207,7 @@ export function useGameSession(
     autoAdvanceRemainingMs,
     autoAdvancePaused,
     assessmentWordIds,
+    missedWordIds,
     startSession,
     startChain,
     submitAnswer,

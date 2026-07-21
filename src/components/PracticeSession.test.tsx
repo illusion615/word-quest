@@ -44,10 +44,14 @@ function renderCompletion(completionAction: 'next' | 'continue' | 'finished'): s
       sessionPreparing={false}
       aiInsight={null}
       onAskAi={() => undefined}
-      assessmentWordIds={new Set()}
-      onToggleAssessment={() => undefined}
+      aiConfigured={false}
+      missedWordIds={new Set()}
       relatedBankNames={[]}
       wordMastered={false}
+      hideMonsterWord={false}
+      hideAnswerCount={false}
+      boostCount={0}
+      timeScale={1}
       speechSupported={false}
       speechSpeaking={false}
       speechError=""

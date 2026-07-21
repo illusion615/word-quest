@@ -1,6 +1,7 @@
 import { Rating, State, type Grade } from 'ts-fsrs';
 import type {
   AnswerRecord,
+  GameMode,
   LearningState,
   WordEntry,
   WordProgress,
@@ -31,7 +32,19 @@ const DEFAULT_TIME_LIMITS = {
   choice: 15_000,
   sentence: 20_000,
   boss: 10_000,
+  'match-meaning': 18_000,
+  'match-word': 15_000,
+  'listen-word': 15_000,
 } as const;
+
+// Option-picking modes exclude an Easy grade: a fast tap can be a lucky guess,
+// so they cap at Good to keep FSRS honest.
+const RECOGNITION_MODES = new Set<GameMode>([
+  'choice',
+  'match-meaning',
+  'match-word',
+  'listen-word',
+]);
 
 export function isReviewDue(
   progress: WordProgress | undefined,
@@ -80,7 +93,7 @@ export function rateAnswer(answer: AnswerRecord): Grade {
     : 1;
 
   if (responseRatio >= HARD_RESPONSE_RATIO) return Rating.Hard;
-  if (answer.mode !== 'choice' && responseRatio <= EASY_RESPONSE_RATIO) {
+  if (!RECOGNITION_MODES.has(answer.mode) && responseRatio <= EASY_RESPONSE_RATIO) {
     return Rating.Easy;
   }
   return Rating.Good;

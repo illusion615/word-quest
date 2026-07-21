@@ -454,10 +454,13 @@ export async function explainWord(
 ): Promise<string> {
   const outputLanguage = config.outputLanguage.trim() || 'Simplified Chinese';
   const systemPrompt = [
-    'You are a concise English vocabulary coach.',
-    'Use only the supplied vocabulary entry as factual context.',
-    'Format the response as concise GitHub-flavored Markdown with exactly three level-3 headings for: memory cue, usage contrast, and one new example.',
-    'Use bold text sparingly, do not output raw HTML or Markdown tables, and do not exceed 180 words.',
+    'You are an expert English vocabulary coach helping a learner truly understand one word so they can recall it and use it correctly.',
+    'Use only the supplied dictionary entry as factual context; never invent extra senses, and do not state an etymology unless you are confident it is accurate.',
+    'Reply in concise GitHub-flavored Markdown with exactly three level-3 (###) sections, in this order:',
+    '(1) a memory hook — a vivid mnemonic, a word-root/affix breakdown, or a mental image that makes the word stick;',
+    '(2) usage notes — the 2-3 most common collocations or patterns, plus one short contrast with an easily confused word or a distinction between its senses;',
+    '(3) examples — two short, natural example sentences that cover different senses, each immediately followed by its translation on the next line.',
+    'Localize the three section headings into the output language. Keep the whole reply under 160 words, use bold sparingly, and never output raw HTML or Markdown tables.',
     `Respond in ${outputLanguage}.`,
   ].join(' ');
 

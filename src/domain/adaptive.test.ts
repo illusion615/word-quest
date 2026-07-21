@@ -57,36 +57,36 @@ function progress(
 
 describe('adaptive study plan', () => {
   it('evolves the exercise with mastery', () => {
-    expect(getAdaptiveStage(undefined)).toMatchObject({ stage: 'new', mode: 'choice' });
+    expect(getAdaptiveStage(undefined)).toMatchObject({ stage: 'new', mode: 'match-meaning' });
     expect(getAdaptiveStage(progress(1, 100, { state: State.Learning })))
-      .toMatchObject({ stage: 'sound', mode: 'listening' });
+      .toMatchObject({ stage: 'sound', mode: 'match-meaning' });
     expect(getAdaptiveStage(progress(2, 100, { state: State.Review, stability: 3 })))
-      .toMatchObject({ stage: 'context', mode: 'sentence' });
+      .toMatchObject({ stage: 'context', mode: 'match-word' });
     expect(getAdaptiveStage(progress(3, 50, {
       state: State.Review,
       stability: ACTIVE_RECALL_STABILITY_DAYS,
-    }))).toMatchObject({ stage: 'recall', mode: 'boss' });
+    }))).toMatchObject({ stage: 'recall', mode: 'listen-word' });
   });
 
   it('keeps weak words in sound training', () => {
     expect(getAdaptiveStage(progress(4, 25, { state: State.Relearning })))
-      .toMatchObject({ stage: 'sound', mode: 'listening' });
+      .toMatchObject({ stage: 'sound', mode: 'match-meaning' });
   });
 
   it('uses a non-audio assessment when speech playback is unavailable', () => {
     expect(getAdaptiveStage(progress(1, 100, { state: State.Learning }), { speechPlayback: false }))
-      .toMatchObject({ stage: 'sound', mode: 'choice', label: '巩固词义' });
+      .toMatchObject({ stage: 'sound', mode: 'match-meaning', label: '巩固识义' });
   });
 
   it('uses FSRS stability rather than historical accuracy to enter active recall', () => {
     expect(getAdaptiveStage(progress(8, 100, {
       state: State.Review,
       stability: ACTIVE_RECALL_STABILITY_DAYS - 0.01,
-    }))).toMatchObject({ stage: 'context', mode: 'sentence' });
+    }))).toMatchObject({ stage: 'context', mode: 'match-word' });
     expect(getAdaptiveStage(progress(2, 50, {
       state: State.Review,
       stability: ACTIVE_RECALL_STABILITY_DAYS,
-    }))).toMatchObject({ stage: 'recall', mode: 'boss' });
+    }))).toMatchObject({ stage: 'recall', mode: 'listen-word' });
   });
 
   it('caps fresh sessions instead of filling multiple chains with every unseen word', () => {
@@ -145,7 +145,7 @@ describe('adaptive study plan', () => {
     expect(items.map((item) => item.chainPosition)).toEqual([0, 1, 2]);
     expect(items.every((item) => item.chainIndex === 0)).toBe(true);
     expect(items.every((item) => item.chainPassage === passage)).toBe(true);
-    expect(items.every((item) => item.mode === 'choice')).toBe(true);
+    expect(items.every((item) => item.mode === 'match-meaning')).toBe(true);
   });
 
   it('materializes sound-stage words without listening mode when speech is unavailable', () => {
@@ -173,7 +173,7 @@ describe('adaptive study plan', () => {
       { speechPlayback: false },
     );
 
-    expect(items[0]).toMatchObject({ stage: 'sound', mode: 'choice' });
+    expect(items[0]).toMatchObject({ stage: 'sound', mode: 'match-meaning' });
   });
 
   it('falls back to seeds plus filler words with an offline passage', () => {

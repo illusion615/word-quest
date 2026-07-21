@@ -22,8 +22,8 @@ describe('BattleHeader', () => {
     expect(html).toContain('释义选择 · 建立识别');
     expect(html).toContain('2 / 10');
     expect(html).toContain('卷王护盾');
-    expect(html).toContain('词怪生命');
+    expect(html).toContain('题目进度');
     expect(html).toContain('稳扎');
-    expect(html.indexOf('词怪生命')).toBeLessThan(html.indexOf('退出本轮'));
+    expect(html.indexOf('题目进度')).toBeLessThan(html.indexOf('退出本轮'));
   });
 });

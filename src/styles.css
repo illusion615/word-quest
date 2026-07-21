@@ -1311,8 +1311,9 @@ input:focus-visible {
 }
 
 .battle-scene {
-  --preview-card-tray-height: clamp(176px, 22vh, 216px);
   position: relative;
+  display: flex;
+  flex-direction: column;
   width: 100%;
   height: 100%;
   min-height: 0;
@@ -1379,90 +1380,566 @@ html[data-theme="dark"] .battle-glass-panel {
   background: rgba(31, 28, 61, 0.46);
 }
 
-.battle-context-panel {
-  bottom: clamp(14px, 2.4vh, 24px);
-  left: clamp(14px, 2vw, 28px);
-  width: min(39vw, 560px);
-  max-height: min(30vh, 280px);
+.battle-passage-strip {
+  z-index: 5;
+  flex: 0 0 auto;
+  align-self: center;
+  width: min(1440px, calc(100% - 40px));
+  margin: 10px 0 2px;
+  padding: 10px 20px;
+  overflow: visible;
+  border: 1px solid rgba(255, 255, 255, 0.58);
+  border-radius: 14px;
+  background: rgba(255, 250, 240, 0.5);
+  box-shadow: 0 14px 34px rgba(36, 36, 74, 0.16);
+  -webkit-backdrop-filter: blur(16px) saturate(1.15);
+  backdrop-filter: blur(16px) saturate(1.15);
 }
 
-.battle-action-panel {
-  right: clamp(14px, 2vw, 28px);
-  bottom: clamp(14px, 2.4vh, 24px);
-  width: min(46vw, 680px);
-  max-height: min(72vh, 660px);
+.battle-passage-strip::-webkit-scrollbar { display: none; }
+
+html[data-theme="dark"] .battle-passage-strip {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(31, 28, 61, 0.5);
 }
 
-.battle-scene.is-preview .battle-action-panel {
-  right: 0;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  height: var(--preview-card-tray-height);
-  max-height: none;
-  overflow: hidden;
-}
-
-.battle-scene.is-preview .battle-context-panel {
-  top: clamp(104px, 13vh, 128px);
-  right: clamp(16px, 2.2vw, 30px);
-  bottom: calc(var(--preview-card-tray-height) + clamp(14px, 2vh, 22px));
-  left: auto;
-  width: min(38vw, 560px);
-  max-height: none;
-  overflow: hidden;
-}
-
-.battle-scene.is-preview .combat-stage {
-  bottom: var(--preview-card-tray-height);
-  overflow: hidden;
-}
-
-.battle-scene.is-preview .battle-context-panel .chain-sentence-bar {
-  padding: clamp(16px, 2vw, 24px);
+.battle-passage-strip .chain-sentence-bar {
   border-left-width: 4px;
 }
 
-.battle-scene.is-preview .battle-context-panel .chain-sentence-text {
-  font-size: clamp(14px, 1.22vw, 18px);
-  line-height: 1.58;
+.battle-action-panel {
+  position: relative;
+  z-index: 6;
+  flex: 0 1 auto;
+  width: 100%;
+  max-height: 56vh;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  padding: 4px clamp(12px, 2vw, 28px) clamp(10px, 2vh, 20px);
 }
 
-.battle-card-tray {
-  position: absolute;
-  z-index: 9;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  padding: clamp(10px, 1.4vh, 16px) clamp(14px, 1.7vw, 26px);
+.battle-action-panel::-webkit-scrollbar { display: none; }
+
+.battle-action-panel .question-layout {
+  width: 100%;
+  gap: 12px;
+  padding-top: 14px;
+}
+
+.battle-action-panel .choice-grid {
+  width: 100%;
+  max-width: min(1120px, 100%);
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+}
+
+.battle-action-panel .sound-button {
+  width: 58px;
+  height: 58px;
+}
+
+.battle-action-panel .sound-button svg {
+  width: 26px;
+  height: 26px;
+}
+
+.battle-action-panel .answer-panel {
+  display: flex;
+  flex-direction: column;
+  width: min(1520px, 100%);
+  margin: 8px auto 0;
+  padding-top: 12px;
+  gap: 11px;
+  text-align: left;
+}
+
+/* The review screen has no question input, so it fills the available height and
+   never shows its own scrollbar — only a tall column (mainly the AI coach)
+   scrolls internally, keeping the definitions fully visible. */
+.battle-action-panel:has(.answer-panel) {
+  display: flex;
+  max-height: 72vh;
+  overflow: hidden;
+}
+
+.battle-action-panel:has(.answer-panel) .question-card {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.battle-action-panel:has(.answer-panel) .answer-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Definition-card header: word + phonetic on the left, learning stats on the right. */
+.answer-def-word-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 14px;
+  flex-wrap: wrap;
+}
+
+.answer-def-word-head .answer-word-heading {
+  justify-content: flex-start;
+  gap: 6px 8px;
+}
+
+.answer-def-word-head .answer-word-heading > strong {
+  font-size: 19px;
+}
+
+/* AI-card header: result + your answer on the left, the next button on the right. */
+.answer-ai-result {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px 16px;
+  flex-wrap: wrap;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--cp-border);
+}
+
+.answer-result-lead {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.answer-result-lead > svg {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.answer-result-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.answer-result-text .answer-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.answer-result-text .chain-position {
+  margin: 0;
+  color: var(--cp-text-muted);
+  font-size: 12px;
+}
+
+.answer-result-text .your-answer {
+  margin: 2px 0 0;
+  font-size: 12px;
+}
+
+.answer-panel.is-correct .answer-result-lead > svg,
+.answer-panel.is-correct .answer-title {
+  color: var(--cp-success);
+}
+
+.answer-panel.is-wrong .answer-result-lead > svg,
+.answer-panel.is-wrong .answer-title {
+  color: var(--cp-danger);
+}
+
+.answer-advance {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+}
+
+/* The auto-advance countdown drains around the primary button's border as a
+   gradient ring; --advance (0-100) is fed in from React each tick. */
+.answer-advance-next {
+  position: relative;
+  border: 3px solid transparent;
+  border-radius: 14px;
+  background:
+    linear-gradient(var(--cp-accent), var(--cp-accent)) padding-box,
+    conic-gradient(
+      from -90deg,
+      #ffd66b,
+      var(--cp-warning) calc(var(--advance, 0) * 1%),
+      rgba(255, 255, 255, 0.32) calc(var(--advance, 0) * 1%)
+    ) border-box;
+}
+
+.answer-advance-next:hover:not(:disabled) {
+  background:
+    linear-gradient(var(--cp-accent-hover), var(--cp-accent-hover)) padding-box,
+    conic-gradient(
+      from -90deg,
+      #ffd66b,
+      var(--cp-warning) calc(var(--advance, 0) * 1%),
+      rgba(255, 255, 255, 0.32) calc(var(--advance, 0) * 1%)
+    ) border-box;
+}
+
+.answer-advance.is-paused .answer-advance-next {
+  background:
+    linear-gradient(var(--cp-accent), var(--cp-accent)) padding-box,
+    conic-gradient(
+      from -90deg,
+      var(--cp-border-strong),
+      var(--cp-border-strong) calc(var(--advance, 0) * 1%),
+      rgba(255, 255, 255, 0.22) calc(var(--advance, 0) * 1%)
+    ) border-box;
+}
+
+.answer-advance-hint {
+  color: var(--cp-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.answer-panel .your-answer {
+  margin: 0;
+  font-size: 13px;
+}
+
+/* Two review cards: a compact definition card (zh/en toggle) and the wider
+   AI coach card, which gets the majority of the width. */
+.answer-columns {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) minmax(0, 1.7fr);
+  gap: 12px 18px;
+  flex: 1 1 auto;
+  min-height: 0;
+  align-items: stretch;
+}
+
+.answer-columns > * {
+  max-height: 100%;
+  min-height: 0;
+}
+
+.answer-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* Definition card: a language toggle keeps only one language on screen. */
+.answer-def-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--cp-border);
+  border-radius: 12px;
+  background: var(--cp-surface-soft);
+}
+
+.answer-def-toggle {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--cp-border);
+  border-radius: 999px;
+  background: var(--cp-surface);
+}
+
+.answer-def-toggle button {
+  padding: 3px 14px;
+  border: 0;
+  border-radius: 999px;
   background: transparent;
-  pointer-events: none;
+  color: var(--cp-text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
 }
 
-.battle-card-tray .memory-chain-preview,
-.battle-card-tray button {
-  pointer-events: auto;
+.answer-def-toggle button.is-active {
+  background: var(--cp-accent);
+  color: var(--cp-accent-fg);
+}
+
+.answer-def-toggle button:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.answer-def-count {
+  color: var(--cp-text-muted);
+  font-size: 11px;
+}
+
+.answer-def-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.answer-def-body .definition-senses {
+  margin: 0;
+}
+
+.answer-def-example {
+  margin: 12px 0 0;
+  padding: 8px 11px;
+  border-left: 3px solid var(--cp-accent);
+  border-radius: 0 8px 8px 0;
+  background: var(--cp-surface);
+  font-size: 13px;
+}
+
+.answer-def-example p {
+  margin: 0;
+  color: var(--cp-text);
+  line-height: 1.5;
+}
+
+.answer-def-example footer {
+  margin-top: 4px;
+  color: var(--cp-text-muted);
+  font-size: 12px;
+}
+
+.answer-ai-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--cp-border);
+  border-radius: 12px;
+  background: var(--cp-surface-soft);
+}
+
+.answer-ai-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.answer-ai-head h3 {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--cp-accent);
+  font-size: 13px;
+}
+
+.answer-ai-head h3 svg {
+  width: 15px;
+  height: 15px;
+}
+
+.answer-ai-regen {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--cp-border);
+  border-radius: 8px;
+  background: var(--cp-surface);
+  color: var(--cp-link);
+  cursor: pointer;
+}
+
+.answer-ai-regen:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.answer-ai-regen svg {
+  width: 14px;
+  height: 14px;
+}
+
+.answer-ai-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.answer-ai-body .markdown-content {
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.answer-ai-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 4px 0;
+  color: var(--cp-text-muted);
+  font-size: 12px;
+}
+
+.answer-ai-hint.is-error {
+  color: var(--cp-danger);
+}
+
+.answer-ai-empty {
+  display: grid;
+  gap: 10px;
+  color: var(--cp-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.answer-ai-empty .secondary-button {
+  justify-self: start;
+}
+
+.answer-banner .answer-word-heading > strong {
+  font-size: 20px;
+}
+
+/* Compact learning stats sit to the right of the result banner. */
+.answer-stats-inline {
+  display: flex;
+  gap: 8px;
+  margin: 0;
+}
+
+.answer-stats-inline > div {
+  display: grid;
+  gap: 1px;
+  justify-items: center;
+  min-width: 52px;
+  padding: 5px 10px;
+  border: 1px solid var(--cp-border);
+  border-radius: 9px;
+  background: var(--cp-surface-soft);
+}
+
+.answer-stats-inline dt {
+  color: var(--cp-text-muted);
+  font-size: 10px;
+}
+
+.answer-stats-inline dd {
+  margin: 0;
+  color: var(--cp-text);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+/* Bank membership sits at the bottom of the definition card. */
+.answer-bank-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding-top: 9px;
+  border-top: 1px dashed var(--cp-border);
+  color: var(--cp-text-muted);
+  font-size: 12px;
+}
+
+.answer-bank-note > svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  color: var(--cp-accent);
+}
+
+.answer-bank-note.is-mastered > svg {
+  color: var(--cp-success);
+}
+
+.answer-bank-note em {
+  margin-left: 6px;
+  font-style: normal;
+  opacity: 0.85;
+}
+
+@media (max-width: 900px) {
+  /* Stack the two cards and let the review scroll normally on narrow screens. */
+  .battle-action-panel:has(.answer-panel),
+  .battle-action-panel:has(.answer-panel) .question-card,
+  .battle-action-panel:has(.answer-panel) .answer-panel {
+    display: block;
+    overflow: auto;
+  }
+  .answer-columns {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .answer-columns > * {
+    max-height: none;
+  }
+  .answer-def-body,
+  .answer-ai-body {
+    max-height: 44vh;
+  }
+  .answer-banner .answer-word-heading {
+    margin-left: 0;
+  }
+  .answer-advance {
+    align-items: flex-start;
+  }
+}
+
+/* During a question the monster lineup shrinks to a tidy status strip so the
+   answer area below has room; in preview the monsters stay large. The extra
+   top padding drops the row clear of the reading passage so the enlarged
+   active monster's head word is never hidden behind it. */
+.battle-scene.is-asking .monster-roster {
+  padding-top: clamp(72px, 12vh, 132px);
+  padding-bottom: 2px;
+}
+.battle-scene.is-asking .roster-monster { width: clamp(78px, 10.5vw, 150px); }
+.battle-scene.is-asking .roster-monster.is-active { scale: 1.16; }
+.battle-scene.is-asking .roster-monster.tier-rare.is-active,
+.battle-scene.is-asking .roster-monster.tier-elite.is-active { scale: 1.22; }
+.battle-scene.is-asking .roster-word {
+  font-size: clamp(14px, 1.25vw, 20px);
+  -webkit-text-stroke-width: 0.8px;
+}
+
+.battle-start-panel {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  padding: 18px 20px 12px;
+  text-align: center;
+}
+
+.battle-scene.is-preview .battle-action-panel {
+  max-height: none;
 }
 
 .combat-hud {
-  position: absolute;
+  position: relative;
   z-index: 2;
-  inset: 0;
+  flex: 1 1 auto;
   min-width: 0;
+  min-height: clamp(104px, 16vh, 176px);
+  display: flex;
   pointer-events: none;
 }
 
 .battle-header {
-  position: absolute;
+  position: relative;
   z-index: 8;
-  top: 14px;
-  right: 14px;
-  left: 14px;
+  flex: 0 0 auto;
   display: grid;
   min-height: 68px;
-  grid-template-columns: minmax(125px, 0.8fr) minmax(130px, 0.8fr) auto auto minmax(190px, 1.25fr) auto;
+  grid-template-columns: minmax(125px, 0.9fr) minmax(120px, 0.8fr) auto auto auto;
   align-items: center;
   gap: 12px;
+  margin: 12px 14px 0;
   padding: 9px 14px;
   border: 0;
   background: transparent;
@@ -1686,14 +2163,17 @@ html[data-theme="dark"] .battle-header {
 }
 
 .combat-stage {
-  position: absolute;
+  position: relative;
   z-index: 1;
-  inset: 72px 0 0;
-  display: grid;
-  align-items: end;
-  justify-items: center;
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  min-height: 0;
   overflow: visible;
 }
+
+.battle-scene.is-preview .combat-stage { align-items: center; }
 
 .combat-monster {
   width: clamp(720px, 72vw, 1080px);
@@ -1765,6 +2245,163 @@ html[data-theme="dark"] .battle-header {
 .combat-feedback.is-hurt,
 .combat-feedback.is-defeat {
   color: var(--cp-link);
+}
+
+.monster-roster {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: clamp(6px, 2vw, 28px);
+  width: 100%;
+  padding: clamp(20px, 3.5vh, 48px) clamp(12px, 3vw, 44px) clamp(6px, 1.6vh, 20px);
+  pointer-events: none;
+}
+
+.roster-monster {
+  position: relative;
+  width: clamp(96px, 15vw, 188px);
+  transition: opacity 220ms ease, filter 220ms ease, translate 220ms ease, scale 220ms ease;
+}
+
+.roster-word-wrap {
+  position: absolute;
+  z-index: 4;
+  bottom: 100%;
+  left: 50%;
+  translate: -50% 2px;
+  pointer-events: auto;
+}
+
+.roster-word {
+  display: block;
+  border: 0;
+  padding: 0 6px;
+  background: transparent;
+  cursor: pointer;
+  color: #fff;
+  font-family: 'Arial Rounded MT Bold', 'Arial Black', 'Segoe UI', system-ui, sans-serif;
+  font-size: clamp(18px, 1.9vw, 30px);
+  font-weight: 900;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+  -webkit-text-stroke: 1px rgba(43, 34, 78, 0.9);
+  paint-order: stroke fill;
+  text-shadow: 0 2px 0 rgba(43, 34, 78, 0.35), 0 5px 12px rgba(36, 36, 74, 0.3);
+}
+
+.roster-word:hover { filter: brightness(1.12); }
+
+.roster-monster.is-active .roster-word { color: var(--cp-warning); }
+.roster-monster.is-missed .roster-word { color: #ff6b6b; }
+.roster-monster.is-defeated .roster-word { opacity: 0.55; }
+
+.roster-word-pop {
+  position: absolute;
+  z-index: 6;
+  bottom: 100%;
+  left: 50%;
+  translate: -50% -4px;
+  display: none;
+  width: max-content;
+  max-width: 240px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: var(--cp-surface);
+  color: var(--cp-text);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: normal;
+  text-align: center;
+  box-shadow: 0 8px 20px rgba(36, 36, 74, 0.24);
+}
+
+.roster-word-pop em {
+  display: block;
+  color: var(--cp-text-muted);
+  font-style: normal;
+  font-size: 11px;
+}
+
+.roster-word-wrap:hover .roster-word-pop,
+.roster-word:focus-visible + .roster-word-pop { display: block; }
+
+.roster-monster img {
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 10px 8px rgba(25, 24, 22, 0.28));
+}
+
+.roster-monster.tier-uncommon { scale: 1.06; }
+.roster-monster.tier-uncommon img {
+  filter: drop-shadow(0 10px 8px rgba(25, 24, 22, 0.28)) hue-rotate(150deg) saturate(1.1);
+}
+.roster-monster.tier-rare { scale: 1.16; }
+.roster-monster.tier-rare img {
+  filter: drop-shadow(0 12px 9px rgba(25, 24, 22, 0.3)) hue-rotate(255deg) saturate(1.25);
+}
+.roster-monster.tier-elite { scale: 1.28; }
+.roster-monster.tier-elite img {
+  filter: drop-shadow(0 14px 10px rgba(25, 24, 22, 0.34)) hue-rotate(-35deg) saturate(1.5) brightness(0.94);
+}
+
+.roster-monster.is-pending { opacity: 0.9; }
+.roster-monster.is-active {
+  z-index: 3;
+  scale: 1.24;
+  animation: monster-idle 1.6s ease-in-out infinite;
+}
+.roster-monster.tier-rare.is-active { scale: 1.32; }
+.roster-monster.tier-elite.is-active { scale: 1.42; }
+.roster-monster.is-active.pose-hit { animation: monster-hurt 320ms ease-out; }
+.roster-monster.is-active.pose-attacking { animation: monster-attack 360ms ease-out; }
+.roster-monster.is-defeated { opacity: 0.26; translate: 0 10px; filter: grayscale(0.7); }
+.roster-monster.is-missed { opacity: 0.72; }
+.roster-monster.is-missed img {
+  filter: drop-shadow(0 9px 7px rgba(25, 24, 22, 0.3)) sepia(0.55) saturate(3) hue-rotate(-28deg);
+}
+
+.roster-feedback {
+  position: absolute;
+  z-index: 5;
+  top: 16%;
+  left: 50%;
+  translate: -50% 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--cp-surface);
+  color: var(--cp-danger);
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+  animation: combat-feedback 800ms ease-out both;
+}
+.roster-feedback svg { width: 14px; height: 14px; }
+.roster-feedback.is-hurt,
+.roster-feedback.is-defeat { color: var(--cp-link); }
+
+.chain-target-word.is-missed {
+  border-bottom-color: var(--cp-danger);
+  color: var(--cp-danger);
+  font-weight: 700;
+}
+
+.difficulty-select {
+  min-height: 34px;
+  padding: 4px 10px;
+  border: 1px solid var(--cp-border);
+  border-radius: 8px;
+  background: var(--cp-bg-elevated);
+  color: var(--cp-text);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
 }
 
 @keyframes monster-idle {
@@ -2266,6 +2903,17 @@ html[data-theme="dark"] .battle-header {
   background: var(--cp-accent-soft);
 }
 
+.choice-button.is-selected {
+  border-color: var(--cp-accent);
+  background: var(--cp-accent-soft);
+  box-shadow: inset 0 0 0 1px var(--cp-accent);
+}
+
+.choice-button.is-selected > span {
+  background: var(--cp-accent);
+  color: var(--cp-accent-fg);
+}
+
 .choice-button span {
   display: grid;
   width: 28px;
@@ -2439,9 +3087,10 @@ html[data-theme="dark"] .battle-header {
 
 .skill-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(200px, 260px));
+  justify-content: center;
   gap: 16px;
-  margin-top: 26px;
+  margin-top: 22px;
 }
 
 .skill-card {
@@ -2512,6 +3161,49 @@ html[data-theme="dark"] .battle-header {
   background: var(--cp-accent);
   color: var(--cp-accent-fg);
   font-size: 11px;
+}
+
+/* "不够卷，再强一点" prep extras: penalty banner and accumulated-boost chips. */
+.boost-penalty {
+  margin: 6px auto 0;
+  padding: 8px 14px;
+  border: 1px solid var(--cp-danger);
+  border-radius: 999px;
+  background: var(--cp-highlight);
+  color: var(--cp-danger);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.boost-active-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.boost-active-row > span:first-child {
+  color: var(--cp-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.boost-chip {
+  padding: 4px 12px;
+  border: 1px solid var(--cp-border-strong);
+  border-radius: 999px;
+  background: var(--cp-surface-soft);
+  color: var(--cp-text);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.roster-word.is-masked {
+  color: var(--cp-warning);
+  letter-spacing: 0;
+  -webkit-text-stroke-width: 0.6px;
 }
 
 .answer-title {
