@@ -1,5 +1,5 @@
 import { createReadStream } from 'node:fs';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from 'csv-parse';
@@ -16,6 +16,42 @@ if (!sourcePath) {
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const outputDirectory = resolve(projectRoot, 'public/data/exam-banks');
 const metadataPath = resolve(projectRoot, 'src/data/exam-bank-metadata.generated.ts');
+
+// Authoritative WordNet POS classifier for exam vocabulary (see
+// scripts/build-wordnet-pos.mjs). Used to strip spurious denominal verb glosses
+// that ECDICT occasionally appends to noun/adjective entries — e.g.
+// "safety … ；vt. 保护, 防护" (the verb sense actually belongs to "safeguard").
+const wordNetPos = JSON.parse(
+  await readFile(resolve(projectRoot, 'scripts/data/wordnet-pos.json'), 'utf8'),
+).pos;
+
+const SPURIOUS_VERB_TAG = /^(vt|vi|v)\.\s*/i;
+// A segment that opens a new part-of-speech sense (POS label or [domain] tag).
+// ECDICT sometimes puts each gloss word of one sense on its own line, which
+// normalizeText joins with '；'; those continuation segments carry no head tag.
+const SENSE_HEAD = /^(?:adj|adv|aux|abbr|art|conj|int|num|prep|pron|vt|vi|v|ad|a|n)\.\s|^\[[^\]]+\]/i;
+
+function wordNetKey(word) {
+  return String(word).trim().toLowerCase().replace(/\s+/g, '_');
+}
+
+// Drop verb (vt./vi./v.) senses from a word that WordNet knows but NOT as a
+// verb. Segments are grouped into sense-groups (a tagged head plus its untagged
+// continuation glosses) so a group is only removed as a whole — never orphaning
+// the trailing glosses of a single verb sense. Modal auxiliaries (aux.) and
+// every other part of speech are left untouched, and the original string is
+// preserved whenever filtering would add no value or remove everything.
+function filterSpuriousVerbSenses(definitionZh, word) {
+  if (!definitionZh || wordNetPos[wordNetKey(word)] !== 'n') return definitionZh;
+  const groups = [];
+  for (const segment of definitionZh.split('；')) {
+    if (groups.length === 0 || SENSE_HEAD.test(segment.trim())) groups.push([segment]);
+    else groups[groups.length - 1].push(segment);
+  }
+  const kept = groups.filter((group) => !SPURIOUS_VERB_TAG.test(group[0].trim()));
+  if (kept.length === 0 || kept.length === groups.length) return definitionZh;
+  return kept.flat().join('；');
+}
 
 const definitions = [
   {
@@ -134,13 +170,14 @@ for await (const row of parser) {
   const matchedBanks = definitions.filter((definition) => definition.membership(tags));
   if (matchedBanks.length === 0) continue;
 
+  const definitionZh = filterSpuriousVerbSenses(normalizeText(row.translation), word);
   const entry = {
     id: word.toLocaleLowerCase('en-US'),
     word,
     phonetic: row.phonetic ? `/${String(row.phonetic).trim()}/` : '',
-    partOfSpeech: derivePartOfSpeech(row.pos, row.translation),
+    partOfSpeech: derivePartOfSpeech(row.pos, definitionZh),
     definition: normalizeText(row.definition),
-    definitionZh: normalizeText(row.translation),
+    definitionZh,
     sourceTags: [...tags].sort(),
     sourceRank: rank(row),
   };

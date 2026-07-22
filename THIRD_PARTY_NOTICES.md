@@ -12,7 +12,17 @@ The generated exam vocabulary files in `public/data/exam-banks/` are derived fro
 
 The complete license text is distributed at `public/data/exam-banks/LICENSE-ECDICT.txt`.
 
-WordBuddy filters ECDICT exam tags, normalizes display fields, combines CET-4 and CET-6 tags for the cumulative CET-6 bank, and sorts entries by available corpus frequency. WordBuddy does not claim that IELTS or TOEFL publish an official exhaustive vocabulary list.
+WordBuddy filters ECDICT exam tags, normalizes display fields, combines CET-4 and CET-6 tags for the cumulative CET-6 bank, and sorts entries by available corpus frequency. It also removes spurious denominal verb glosses that ECDICT occasionally appends to noun/adjective entries (for example the bogus `vt. 保护, 防护` on `safety`), validated against WordNet part-of-speech membership (see below). WordBuddy does not claim that IELTS or TOEFL publish an official exhaustive vocabulary list.
+
+## WordNet
+
+The part-of-speech classifier in `scripts/data/wordnet-pos.json` is derived from Princeton WordNet 3.0 and is used at build time to decide whether a Chinese verb sense is legitimate for a given word:
+
+- Project: https://wordnet.princeton.edu/
+- Version: WordNet 3.0
+- License: WordNet License (BSD-style; free to use with attribution)
+
+Only a small derived lemma→POS table is committed; the raw WordNet database is not vendored. Princeton University makes no warranties regarding WordNet and is not liable for its use.
 
 ## canvas-confetti
 

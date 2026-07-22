@@ -20,6 +20,8 @@
 
 高考与 CET 标签是大纲索引汇编，并非考试机构发布的官方电子词表。IELTS 和 TOEFL 官方没有固定词汇全集，因此应用明确标为备考词表。数据源 commit、生成日期、缺失字段统计和许可证保存在 `public/data/exam-banks/manifest.json`。
 
+构建时会用 Princeton WordNet 3.0 的词性归属校验中文释义，删除 ECDICT 偶尔误挂在名词/形容词条目上的伪造动词义（例如 `safety` 上错误的 `vt. 保护, 防护`）。校验表 `scripts/data/wordnet-pos.json` 由 `npm run data:wordnet-pos` 生成，只保留“该词是否为动词”的最小判定；真正的多词性动词（如 `time`、`make`）与情态动词（如 `may`）不受影响。
+
 学习进度按规范化单词 ID 全局记录，不按词库重复保存。首次练习后立即提升相关词库的“学习覆盖”；只有 FSRS 卡片进入 Review 状态且记忆稳定性达到 21 天，才计入“稳定掌握”。历史正确率仅用于反馈，不决定调度或掌握。跨库成员关系由同一固定数据源生成，并保存在 `public/data/exam-banks/coverage-index.json`。
 
 ## 本地运行

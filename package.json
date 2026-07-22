@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "data:build": "node scripts/build-exam-banks.mjs",
+    "data:wordnet-pos": "node scripts/build-wordnet-pos.mjs",
     "data:verify": "node scripts/verify-exam-banks.mjs",
     "ai:proxy": "node scripts/llm-cors-proxy.mjs",
     "assets:optimize": "node scripts/optimize-art.mjs",
