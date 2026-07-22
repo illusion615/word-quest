@@ -172,7 +172,7 @@ export function Dashboard({
                 </div>
                 <div className="journey-level-title">
                   <div>
-                    <span>词怪 {level.wordStart + 1}–{level.wordEnd}</span>
+                    <span>{level.frequencyLabel}</span>
                     <h3>{level.kind === 'boss' ? 'Boss 决战' : '词群挑战'}</h3>
                   </div>
                   {level.status === 'completed'

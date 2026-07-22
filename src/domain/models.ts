@@ -40,6 +40,10 @@ export interface WordEntry {
   exampleZh?: string;
   banks: BankId[];
   sourceTags?: string[];
+  /** Runtime-only rank in the selected bank's common-first frequency order. */
+  frequencyRank?: number;
+  /** Runtime-only 0..1 percentile; 0 is most common and 1 is rarest. */
+  frequencyPercentile?: number;
 }
 
 export type DefinitionLanguage = 'zh' | 'en';

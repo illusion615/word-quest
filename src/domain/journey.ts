@@ -1,10 +1,21 @@
 import type { BankId, LearningState, WordEntry } from './models';
-import { isBelowBankLevel } from './wordLevel';
+import {
+  allocateFrequencyQuotas,
+  FREQUENCY_BAND_COUNT,
+  splitFrequencyBands,
+  weaveFrequencyBands,
+  withFrequencyMetadata,
+} from './frequencyMix';
 import { getStudyAvailability } from './learningSchedule';
 
 export const WORDS_PER_LEVEL = 25;
 export const TARGET_LEVELS_PER_CHAPTER = 20;
 export const BOSS_LEVEL_INTERVAL = 5;
+// The average weight of every band across the whole journey is 25%, so all
+// words are consumed exactly once. Early levels lean common; late levels lean
+// rare, while every full level still contains words from all four bands.
+const EARLY_FREQUENCY_WEIGHTS = [0.4, 0.3, 0.2, 0.1] as const;
+const LATE_FREQUENCY_WEIGHTS = [0.1, 0.2, 0.3, 0.4] as const;
 
 export type JourneyLevelStatus = 'completed' | 'active' | 'locked';
 export type JourneyLevelKind = 'normal' | 'boss';
@@ -27,6 +38,7 @@ export interface JourneyLevel {
   progressPercentage: number;
   perfect: boolean;
   status: JourneyLevelStatus;
+  frequencyLabel: string;
 }
 
 export interface JourneyChapter {
@@ -81,6 +93,13 @@ function roundPercentage(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+export function levelFrequencyLabel(levelIndex: number, totalLevels: number): string {
+  const progress = totalLevels <= 1 ? 0.5 : levelIndex / (totalLevels - 1);
+  if (progress < 1 / 3) return '高频为主 · 混合低频';
+  if (progress > 2 / 3) return '低频为主 · 保留高频';
+  return '高低频均衡';
+}
+
 function chapterTitle(index: number, chapterCount: number): string {
   if (chapterCount <= 1) return CHAPTER_TITLES.at(-1) ?? '卷王王座';
   const titleIndex = Math.round((index / (chapterCount - 1)) * (CHAPTER_TITLES.length - 1));
@@ -97,12 +116,63 @@ function levelsPerChapter(totalLevels: number): number[] {
   );
 }
 
+function frequencyWeights(progress: number): number[] {
+  return EARLY_FREQUENCY_WEIGHTS.map((early, index) => (
+    early + ((LATE_FREQUENCY_WEIGHTS[index] - early) * progress)
+  ));
+}
+
+/**
+ * Converts a common-first frequency list into stable 25-word level blocks.
+ * Each block mixes four frequency bands; the ratio moves smoothly from
+ * 40/30/20/10 to 10/20/30/40 over the journey.
+ */
+export function orderByFrequencyCurve(entries: WordEntry[]): WordEntry[] {
+  if (entries.length <= 1) return [...entries];
+  const bands = splitFrequencyBands(entries);
+  const offsets = bands.map(() => 0);
+  const totalLevels = Math.ceil(entries.length / WORDS_PER_LEVEL);
+  const ordered: WordEntry[] = [];
+
+  for (let levelIndex = 0; levelIndex < totalLevels; levelIndex += 1) {
+    const remaining = entries.length - ordered.length;
+    const levelSize = Math.min(WORDS_PER_LEVEL, remaining);
+    const progress = totalLevels <= 1 ? 0.5 : levelIndex / (totalLevels - 1);
+    const futureMixableLevels = Array.from(
+      { length: totalLevels - levelIndex - 1 },
+      (_, offset) => Math.min(
+        WORDS_PER_LEVEL,
+        Math.max(0, entries.length - ((levelIndex + offset + 1) * WORDS_PER_LEVEL)),
+      ),
+    ).filter((size) => size >= FREQUENCY_BAND_COUNT).length;
+    const available = bands.map((band, index) => band.length - offsets[index]);
+    const availableNow = available.map((count) => (
+      Math.max(0, count - futureMixableLevels)
+    ));
+    const quotas = allocateFrequencyQuotas(
+      availableNow,
+      levelSize,
+      frequencyWeights(progress),
+    );
+    const levelBands = bands.map((band, index) => {
+      const words = band.slice(offsets[index], offsets[index] + quotas[index]);
+      offsets[index] += words.length;
+      return words;
+    });
+    ordered.push(...weaveFrequencyBands(levelBands));
+  }
+
+  return ordered;
+}
+
 function orderedByBankLevel(entries: WordEntry[], bankId?: BankId): WordEntry[] {
-  return bankId
-    ? [...entries].sort((left, right) => (
-        Number(isBelowBankLevel(left, bankId)) - Number(isBelowBankLevel(right, bankId))
-      ))
-    : entries;
+  const ranked = withFrequencyMetadata(entries);
+  // Bank membership already scopes the curriculum. Sub-level basics remain in
+  // the common band as anchors instead of being pushed into an all-basic tail;
+  // the study scheduler still prevents them from crowding out target-level new
+  // words inside each mixed level.
+  void bankId;
+  return orderByFrequencyCurve(ranked);
 }
 
 function masteryScore(word: WordEntry, state: LearningState): number {
@@ -223,6 +293,7 @@ export function buildBankJourney(
         progressPercentage: level.progressPercentage,
         perfect: level.masteredCount === level.words.length,
         status,
+        frequencyLabel: levelFrequencyLabel(level.globalIndex, totalLevels),
       };
     });
     const chapterWords = chapterRawLevels.flatMap((level) => level.words);

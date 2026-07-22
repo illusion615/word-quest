@@ -10,6 +10,7 @@ import {
   parseLearningState,
   recordAnswer,
 } from './progress';
+import { frequencyBand, selectFrequencyMix, withFrequencyMetadata } from './frequencyMix';
 
 function answer(wordId: string, correct: boolean, answeredAt: string): AnswerRecord {
   return {
@@ -53,6 +54,36 @@ describe('challenge difficulty selection', () => {
 
   it('relaxed keeps the raw common-first order', () => {
     expect(ids('relaxed')).toEqual(['alpha', 'bravo', 'charlie']);
+  });
+
+  it('biases a mixed level without dropping any frequency band', () => {
+    const rankedEntries = withFrequencyMetadata(Array.from({ length: 40 }, (_, index) => (
+      makeWord(`rank-${index}`, ['gk', 'cet6'])
+    )));
+    const mixedEntries = selectFrequencyMix(rankedEntries, rankedEntries.length, 'balanced');
+    const select = (difficulty: 'relaxed' | 'standard' | 'hardcore') => (
+      buildStudyCandidates(
+        mixedEntries,
+        state,
+        now,
+        'gaokao',
+        12,
+        difficulty,
+      ).map((candidate) => candidate.word)
+    );
+    const bandCounts = (words: WordEntry[]) => words.reduce((counts, word) => {
+      counts[frequencyBand(word)] += 1;
+      return counts;
+    }, [0, 0, 0, 0]);
+    const relaxed = bandCounts(select('relaxed'));
+    const standard = bandCounts(select('standard'));
+    const hardcore = bandCounts(select('hardcore'));
+
+    expect(relaxed.every((count) => count > 0)).toBe(true);
+    expect(hardcore.every((count) => count > 0)).toBe(true);
+    expect(relaxed[0]).toBeGreaterThan(relaxed[3]);
+    expect(hardcore[3]).toBeGreaterThan(hardcore[0]);
+    expect(standard).toEqual([3, 3, 3, 3]);
   });
 });
 

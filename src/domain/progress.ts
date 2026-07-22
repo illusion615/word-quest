@@ -16,6 +16,7 @@ import type {
 import { isWordMastered } from './coverage';
 import { isReviewDue, rateAnswer } from './learningSchedule';
 import { isBelowBankLevel } from './wordLevel';
+import { selectFrequencyMix } from './frequencyMix';
 
 export const LEARNING_STORAGE_KEY = 'wordbuddy.learning.v1';
 
@@ -33,9 +34,9 @@ export const DEFAULT_NEW_WORD_LIMIT = 8;
 export type StudyPriority = 'due' | 'new';
 
 /**
- * How hard the newly introduced words should be. Banks are frequency-sorted
- * (common first), so this just reorders unseen words: relaxed keeps the easiest
- * common words up front, hardcore leads with the rarest in-level vocabulary.
+ * How hard the newly introduced words should be inside an already frequency-
+ * mixed journey level. Relaxed biases toward common bands, hardcore toward rare
+ * bands, but both preserve representation from every available band.
  */
 export type ChallengeDifficulty = 'relaxed' | 'standard' | 'hardcore';
 
@@ -43,12 +44,27 @@ function orderUnseenByDifficulty(
   unseen: WordEntry[],
   difficulty: ChallengeDifficulty,
   bankId?: BankId,
+  limit = unseen.length,
 ): WordEntry[] {
-  if (!bankId || difficulty === 'relaxed') return unseen;
-  const atLevel = unseen.filter((entry) => !isBelowBankLevel(entry, bankId));
-  const below = unseen.filter((entry) => isBelowBankLevel(entry, bankId));
-  const leadingAtLevel = difficulty === 'hardcore' ? [...atLevel].reverse() : atLevel;
-  return [...leadingAtLevel, ...below];
+  const atLevel = bankId
+    ? unseen.filter((entry) => !isBelowBankLevel(entry, bankId))
+    : unseen;
+  const below = bankId
+    ? unseen.filter((entry) => isBelowBankLevel(entry, bankId))
+    : [];
+  const atLevelLimit = Math.min(limit, atLevel.length);
+  const leadingAtLevel = difficulty === 'standard'
+    ? atLevel.slice(0, atLevelLimit)
+    : selectFrequencyMix(
+        atLevel,
+        atLevelLimit,
+        difficulty === 'relaxed' ? 'common-led' : 'rare-led',
+      );
+  const remaining = Math.max(0, limit - leadingAtLevel.length);
+  const trailingBelow = difficulty === 'hardcore'
+    ? selectFrequencyMix(below, remaining, 'rare-led')
+    : selectFrequencyMix(below, remaining, 'common-led');
+  return [...leadingAtLevel, ...trailingBelow];
 }
 
 export interface StudyCandidate {
@@ -179,8 +195,8 @@ export function buildStudyCandidates(
       return leftDue.localeCompare(rightDue);
     });
   const unseen = entries.filter((entry) => !state.progress[entry.id]);
-  const orderedUnseen = orderUnseenByDifficulty(unseen, difficulty, bankId);
-  const limitedUnseen = orderedUnseen.slice(0, Math.max(0, Math.floor(newWordLimit)));
+  const limit = Math.max(0, Math.floor(newWordLimit));
+  const limitedUnseen = orderUnseenByDifficulty(unseen, difficulty, bankId, limit);
 
   return [
     ...due.map((word) => ({ word, priority: 'due' as const })),
