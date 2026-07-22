@@ -1,9 +1,20 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react';
 import {
   ArrowRight,
   CheckCircle2,
   Layers3,
   LoaderCircle,
+  Pause,
+  Play,
   RefreshCw,
   Sparkles,
   Star,
@@ -14,8 +25,10 @@ import type {
   GameMode,
   GameSessionState,
   LearningStage,
+  SessionAnswer,
   WordEntry,
   WordProgress,
+  WordSenseExample,
 } from '../domain/models';
 import type { CombatState } from '../domain/combat';
 import { calculateStars, type LevelGameResult } from '../domain/gameProgress';
@@ -28,6 +41,7 @@ import {
   AUTO_ADVANCE_DELAY_MS,
   MODE_TIME_LIMITS,
   getRevealedChainWordIds,
+  resolveTimeoutSubmission,
 } from '../domain/session';
 import { BossQuestion } from './modes/BossQuestion';
 import { ChainSentenceBar } from './ChainSentenceBar';
@@ -36,6 +50,7 @@ import { ListeningQuestion } from './modes/ListeningQuestion';
 import { ListenWordQuestion } from './modes/ListenWordQuestion';
 import { MatchMeaningQuestion } from './modes/MatchMeaningQuestion';
 import { MatchWordQuestion } from './modes/MatchWordQuestion';
+import { MistakeReview } from './MistakeReview';
 import { SentenceQuestion } from './modes/SentenceQuestion';
 import { SenseList } from './WordDefinitions';
 import { parseDefinitionSenses } from '../domain/wordText';
@@ -53,7 +68,7 @@ interface PracticeSessionProps {
   remainingMs: number;
   autoAdvanceRemainingMs: number;
   autoAdvancePaused: boolean;
-  onSubmit: (correct: boolean, response: string, correctAnswer: string) => void;
+  onSubmit: (correct: boolean, response: string, correctAnswer?: string) => void;
   onStartChain: () => void;
   onNext: () => void;
   onToggleAutoAdvance: () => void;
@@ -73,6 +88,7 @@ interface PracticeSessionProps {
     wordId: string;
     status: 'loading' | 'success' | 'error';
     text: string;
+    senseExamples: WordSenseExample[];
   } | null;
   onAskAi: (word: WordEntry) => void;
   aiConfigured: boolean;
@@ -159,6 +175,9 @@ export function PracticeSession({
   const autoAdvancePercent = (autoAdvanceRemainingMs / AUTO_ADVANCE_DELAY_MS) * 100;
   const revealedWordIds = getRevealedChainWordIds(session);
   const rarityIndex = useMemo(() => buildRarityIndex(entries), [entries]);
+  const questionDraftRef = useRef<SessionAnswer | null>(null);
+  const submittedQuestionRef = useRef<string | null>(null);
+  const questionKey = `${session.startedAt}:${session.index}:${currentWord?.id ?? ''}`;
   // Once a question is answered, the vocabulary coach is generated automatically
   // (only when a model is configured). Guarded so it fires just once per word.
   const autoAiWordRef = useRef<string | null>(null);
@@ -186,6 +205,35 @@ export function PracticeSession({
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
   }, [session.phase, onToggleAutoAdvance]);
+
+  useEffect(() => {
+    questionDraftRef.current = null;
+    submittedQuestionRef.current = null;
+  }, [questionKey]);
+
+  const handleDraftChange = useCallback((draft: SessionAnswer | null) => {
+    questionDraftRef.current = draft;
+  }, []);
+
+  const handleQuestionSubmit = useCallback((
+    correct: boolean,
+    response: string,
+    correctAnswer?: string,
+  ) => {
+    if (submittedQuestionRef.current === questionKey) return;
+    submittedQuestionRef.current = questionKey;
+    questionDraftRef.current = null;
+    onSubmit(correct, response, correctAnswer);
+  }, [onSubmit, questionKey]);
+
+  useEffect(() => {
+    if (session.phase !== 'asking' || remainingMs > 0) return;
+    if (submittedQuestionRef.current === questionKey) return;
+    submittedQuestionRef.current = questionKey;
+    const submission = resolveTimeoutSubmission(questionDraftRef.current);
+    questionDraftRef.current = null;
+    onSubmit(...submission);
+  }, [onSubmit, questionKey, remainingMs, session.phase]);
   const roster = buildWaveMonsters(
     currentChainItems.map((item): WaveMonsterInput => ({
       word: item.word,
@@ -217,6 +265,9 @@ export function PracticeSession({
   const aiForWord = aiInsight && currentWord && aiInsight.wordId === currentWord.id
     ? aiInsight
     : null;
+  const senseExampleStatus = !aiConfigured
+    ? 'unavailable'
+    : aiForWord?.status ?? 'loading';
 
   function handleStartChain() {
     const speaksOnStart = currentItem?.mode === 'listening'
@@ -297,6 +348,7 @@ export function PracticeSession({
             </button>
           </div>
         </section>
+        <MistakeReview results={session.results} />
       </main>
     );
   }
@@ -377,17 +429,26 @@ export function PracticeSession({
                 voiceName={speechVoiceName}
                 onSpeak={onSpeak}
                 onOpenSettings={onOpenSpeechSettings}
-                onSubmit={onSubmit}
+                onSubmit={handleQuestionSubmit}
+                onDraftChange={handleDraftChange}
               />
             )}
             {mode === 'choice' && (
-              <ChoiceQuestion word={currentWord} entries={entries} onSubmit={onSubmit} />
+              <ChoiceQuestion word={currentWord} entries={entries} onSubmit={handleQuestionSubmit} />
             )}
             {mode === 'sentence' && (
-              <SentenceQuestion word={currentWord} onSubmit={onSubmit} />
+              <SentenceQuestion
+                word={currentWord}
+                onSubmit={handleQuestionSubmit}
+                onDraftChange={handleDraftChange}
+              />
             )}
             {mode === 'boss' && (
-              <BossQuestion word={currentWord} onSubmit={onSubmit} />
+              <BossQuestion
+                word={currentWord}
+                onSubmit={handleQuestionSubmit}
+                onDraftChange={handleDraftChange}
+              />
             )}
             {mode === 'match-meaning' && (
               <MatchMeaningQuestion
@@ -396,12 +457,13 @@ export function PracticeSession({
                 isSpeechSupported={speechSupported}
                 isSpeaking={speechSpeaking}
                 onSpeak={onSpeak}
-                onSubmit={onSubmit}
+                onSubmit={handleQuestionSubmit}
+                onDraftChange={handleDraftChange}
                 hideAnswerCount={hideAnswerCount}
               />
             )}
             {mode === 'match-word' && (
-              <MatchWordQuestion word={currentWord} entries={entries} onSubmit={onSubmit} />
+              <MatchWordQuestion word={currentWord} entries={entries} onSubmit={handleQuestionSubmit} />
             )}
             {mode === 'listen-word' && (
               <ListenWordQuestion
@@ -413,7 +475,7 @@ export function PracticeSession({
                 voiceName={speechVoiceName}
                 onSpeak={onSpeak}
                 onOpenSettings={onOpenSpeechSettings}
-                onSubmit={onSubmit}
+                onSubmit={handleQuestionSubmit}
               />
             )}
           </div>
@@ -421,7 +483,7 @@ export function PracticeSession({
 
         {session.phase === 'answered' && session.answer && (
           <div className={`answer-panel ${session.answer.correct ? 'is-correct' : 'is-wrong'}`}>
-            <div className="answer-columns">
+            <div className={`answer-columns ${aiConfigured ? 'has-ai' : ''}`}>
               <section className="answer-def-card" aria-labelledby="answer-def-count">
                 <div className="answer-def-word-head">
                   <div className="answer-word-heading">
@@ -465,13 +527,12 @@ export function PracticeSession({
                   </span>
                 </div>
                 <div className="answer-def-body" lang={effectiveDefLang === 'en' ? 'en' : undefined}>
-                  <SenseList senses={effectiveDefLang === 'zh' ? zhSenses : enSenses} />
-                  {currentWord.example && (
-                    <blockquote className="answer-def-example" lang="en">
-                      <p>{currentWord.example}</p>
-                      {currentWord.exampleZh && <footer>{currentWord.exampleZh}</footer>}
-                    </blockquote>
-                  )}
+                  <SenseList
+                    senses={effectiveDefLang === 'zh' ? zhSenses : enSenses}
+                    language={effectiveDefLang}
+                    examples={aiForWord?.senseExamples}
+                    exampleStatus={senseExampleStatus}
+                  />
                 </div>
                 {relatedBankNames.length > 0 && (
                   <p className={`answer-bank-note ${wordMastered ? 'is-mastered' : ''}`}>
@@ -484,7 +545,10 @@ export function PracticeSession({
                 )}
               </section>
 
-              <section className="answer-ai-col" aria-labelledby="answer-ai-heading">
+              <section
+                className={`answer-ai-col ${aiConfigured ? '' : 'is-feedback-only'}`}
+                aria-labelledby={aiConfigured ? 'answer-ai-heading' : undefined}
+              >
                 <div className="answer-ai-result">
                   <div className="answer-result-lead">
                     {session.answer.correct
@@ -501,65 +565,69 @@ export function PracticeSession({
                     </div>
                   </div>
                   <div className={`answer-advance ${autoAdvancePaused ? 'is-paused' : ''}`}>
-                    <button
-                      type="button"
-                      className="primary-button answer-advance-next"
-                      onClick={onNext}
-                      style={{ ['--advance']: autoAdvancePercent } as CSSProperties}
-                    >
-                      {session.index + 1 >= session.queue.length ? '立即查看结果' : '立即下一题'}
-                      <ArrowRight aria-hidden="true" />
-                    </button>
+                    <div className="answer-advance-actions">
+                      <button
+                        type="button"
+                        className="answer-auto-toggle"
+                        onClick={onToggleAutoAdvance}
+                        aria-label={autoAdvancePaused ? '继续自动前进' : '暂停自动前进'}
+                        aria-pressed={autoAdvancePaused}
+                        title={autoAdvancePaused ? '继续自动前进' : '暂停自动前进'}
+                      >
+                        {autoAdvancePaused
+                          ? <Play aria-hidden="true" />
+                          : <Pause aria-hidden="true" />}
+                      </button>
+                      <button
+                        type="button"
+                        className="primary-button answer-advance-next"
+                        onClick={onNext}
+                        style={{ ['--advance']: autoAdvancePercent } as CSSProperties}
+                      >
+                        {session.index + 1 >= session.queue.length ? '查看结果' : '下一题'}
+                        <ArrowRight aria-hidden="true" />
+                      </button>
+                    </div>
                     <span className="answer-advance-hint" aria-live="polite">
-                      {autoAdvancePaused ? '已暂停 · 按空格继续' : '按空格暂停计时'}
+                      {autoAdvancePaused ? '自动前进已暂停' : '自动前进中'}
                     </span>
                   </div>
                 </div>
-                <div className="answer-ai-head answer-card-head">
-                  <h3 id="answer-ai-heading"><Sparkles aria-hidden="true" /> AI 词汇教练</h3>
-                  {aiConfigured && (
-                    <button
-                      type="button"
-                      className="answer-ai-regen"
-                      onClick={() => onAskAi(currentWord)}
-                      disabled={aiForWord?.status === 'loading'}
-                      aria-label="重新生成讲解"
-                      title="重新生成讲解"
-                    >
-                      <RefreshCw
-                        aria-hidden="true"
-                        className={aiForWord?.status === 'loading' ? 'spin-icon' : ''}
-                      />
-                    </button>
-                  )}
-                </div>
-                <div className="answer-ai-body">
-                  {aiForWord?.status === 'success' && (
-                    <Suspense fallback={<p className="markdown-loading">正在排版讲解…</p>}>
-                      <MarkdownContent content={aiForWord.text} />
-                    </Suspense>
-                  )}
-                  {aiForWord?.status === 'error' && (
-                    <p className="answer-ai-hint is-error" aria-live="polite">{aiForWord.text}</p>
-                  )}
-                  {(aiForWord?.status === 'loading' || (!aiForWord && aiConfigured)) && (
-                    <p className="answer-ai-hint" aria-live="polite">
-                      <LoaderCircle aria-hidden="true" className="spin-icon" /> 正在生成讲解…
-                    </p>
-                  )}
-                  {!aiForWord && !aiConfigured && (
-                    <div className="answer-ai-empty">
-                      <p>连接本地或云端模型后，答题即可自动获得记忆钩子、用法与例句。</p>
+                {aiConfigured && (
+                  <>
+                    <div className="answer-ai-head answer-card-head">
+                      <h3 id="answer-ai-heading"><Sparkles aria-hidden="true" /> AI 词汇教练</h3>
                       <button
                         type="button"
-                        className="secondary-button"
+                        className="answer-ai-regen"
                         onClick={() => onAskAi(currentWord)}
+                        disabled={aiForWord?.status === 'loading'}
+                        aria-label="重新生成讲解"
+                        title="重新生成讲解"
                       >
-                        <Sparkles aria-hidden="true" /> 开启 AI 讲解
+                        <RefreshCw
+                          aria-hidden="true"
+                          className={aiForWord?.status === 'loading' ? 'spin-icon' : ''}
+                        />
                       </button>
                     </div>
-                  )}
-                </div>
+                    <div className="answer-ai-body">
+                      {aiForWord?.status === 'success' && (
+                        <Suspense fallback={<p className="markdown-loading">正在排版讲解…</p>}>
+                          <MarkdownContent content={aiForWord.text} />
+                        </Suspense>
+                      )}
+                      {aiForWord?.status === 'error' && (
+                        <p className="answer-ai-hint is-error" aria-live="polite">{aiForWord.text}</p>
+                      )}
+                      {(aiForWord?.status === 'loading' || !aiForWord) && (
+                        <p className="answer-ai-hint" aria-live="polite">
+                          <LoaderCircle aria-hidden="true" className="spin-icon" /> 正在生成讲解…
+                        </p>
+                      )}
+                    </div>
+                  </>
+                )}
               </section>
             </div>
           </div>

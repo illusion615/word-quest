@@ -1,8 +1,11 @@
 import type {
   ChainBlueprint,
   ChainPassage,
+  DefinitionLanguage,
   WordBankManifest,
   WordEntry,
+  WordExplanation,
+  WordSenseExample,
 } from '../domain/models';
 import {
   CHAIN_MAX_SIZE,
@@ -13,7 +16,7 @@ import {
   countTargetOccurrences,
   type SentenceLevelPolicy,
 } from '../domain/sentencePolicy';
-import { primarySense } from '../domain/wordText';
+import { parseDefinitionSenses, primarySense } from '../domain/wordText';
 
 export type AiAuthMode = 'bearer' | 'api-key';
 
@@ -191,14 +194,126 @@ export async function requestCompletion(
   }
 }
 
-function parseJsonResponse(content: string): unknown {
+function parseJsonResponse(
+  content: string,
+  errorMessage = 'AI 没有返回有效的句子数据，已切换到离线串联。',
+): unknown {
   const trimmed = content.trim();
   const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i)?.[1];
   try {
     return JSON.parse(fenced ?? trimmed);
   } catch {
-    throw new Error('AI 没有返回有效的句子数据，已切换到离线串联。');
+    throw new Error(errorMessage);
   }
+}
+
+interface SenseExamplePayload {
+  language?: unknown;
+  senseIndex?: unknown;
+  sentence?: unknown;
+  translation?: unknown;
+}
+
+interface ValidSenseExamplePayload {
+  language: DefinitionLanguage;
+  senseIndex: number;
+  sentence: string;
+  translation: string;
+}
+
+export function parseWordExplanation(
+  content: string,
+  chineseSenseCount: number,
+  englishSenseCount: number,
+): WordExplanation {
+  const payload = parseJsonResponse(content, 'AI 没有返回有效的词汇讲解数据。');
+  const record = payload && typeof payload === 'object'
+    ? payload as { coachMarkdown?: unknown; senseExamples?: unknown }
+    : null;
+  const markdown = typeof record?.coachMarkdown === 'string'
+    ? record.coachMarkdown.trim()
+    : '';
+  if (!markdown || !Array.isArray(record?.senseExamples)) {
+    throw new Error('AI 词汇讲解内容不完整。');
+  }
+
+  const examples = record.senseExamples.filter((value): value is ValidSenseExamplePayload => (
+    Boolean(value)
+    && typeof value === 'object'
+    && ((value as SenseExamplePayload).language === 'zh'
+      || (value as SenseExamplePayload).language === 'en')
+    && typeof (value as SenseExamplePayload).senseIndex === 'number'
+    && Number.isInteger((value as SenseExamplePayload).senseIndex)
+    && typeof (value as SenseExamplePayload).sentence === 'string'
+    && Boolean(((value as SenseExamplePayload).sentence as string).trim())
+    && typeof (value as SenseExamplePayload).translation === 'string'
+    && Boolean(((value as SenseExamplePayload).translation as string).trim())
+  ));
+  const expected = [
+    ...Array.from({ length: chineseSenseCount }, (_, senseIndex) => ({
+      language: 'zh' as DefinitionLanguage,
+      senseIndex,
+    })),
+    ...Array.from({ length: englishSenseCount }, (_, senseIndex) => ({
+      language: 'en' as DefinitionLanguage,
+      senseIndex,
+    })),
+  ];
+  const exampleKeys = new Set(examples.map((example) => (
+    `${example.language}:${example.senseIndex}`
+  )));
+  if (examples.length > expected.length || exampleKeys.size !== examples.length) {
+    throw new Error('AI 返回的义项例句数量不正确。');
+  }
+  const senseExamples: WordSenseExample[] = expected.map(({ language, senseIndex }) => {
+    const match = examples.find((example) => (
+      example.language === language
+      && example.senseIndex === senseIndex
+    ));
+    if (!match) {
+      throw new Error(`AI 未给出${language === 'zh' ? '中文' : '英文'}第 ${senseIndex + 1} 个义项的例句。`);
+    }
+    return {
+      language,
+      senseIndex,
+      sentence: match.sentence.trim(),
+      translation: match.translation.trim(),
+    };
+  });
+
+  return { markdown, senseExamples };
+}
+
+function wordExplanationResponseFormat(): Record<string, unknown> {
+  return {
+    type: 'json_schema',
+    json_schema: {
+      name: 'wordbuddy_word_explanation',
+      strict: true,
+      schema: {
+        type: 'object',
+        properties: {
+          coachMarkdown: { type: 'string' },
+          senseExamples: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                language: { type: 'string', enum: ['zh', 'en'] },
+                senseIndex: { type: 'integer', minimum: 0 },
+                sentence: { type: 'string' },
+                translation: { type: 'string' },
+              },
+              required: ['language', 'senseIndex', 'sentence', 'translation'],
+              additionalProperties: false,
+            },
+          },
+        },
+        required: ['coachMarkdown', 'senseExamples'],
+        additionalProperties: false,
+      },
+    },
+  };
 }
 
 function normalizeWord(value: string): string {
@@ -451,21 +566,39 @@ export async function testAiConnection(config: AiConnectionConfig): Promise<stri
 export async function explainWord(
   config: AiConnectionConfig,
   word: WordEntry,
-): Promise<string> {
+): Promise<WordExplanation> {
   const outputLanguage = config.outputLanguage.trim() || 'Simplified Chinese';
+  const chineseSenses = parseDefinitionSenses(word.definitionZh);
+  const englishSenses = parseDefinitionSenses(word.definition);
   const systemPrompt = [
     'You are an expert English vocabulary coach helping a learner truly understand one word so they can recall it and use it correctly.',
     'Use only the supplied dictionary entry as factual context; never invent extra senses, and do not state an etymology unless you are confident it is accurate.',
-    'Reply in concise GitHub-flavored Markdown with exactly three level-3 (###) sections, in this order:',
+    'Return one JSON object matching the supplied schema.',
+    'coachMarkdown must be concise GitHub-flavored Markdown with exactly three level-3 (###) sections, in this order:',
     '(1) a memory hook — a vivid mnemonic, a word-root/affix breakdown, or a mental image that makes the word stick;',
     '(2) usage notes — the 2-3 most common collocations or patterns, plus one short contrast with an easily confused word or a distinction between its senses;',
-    '(3) examples — two short, natural example sentences that cover different senses, each immediately followed by its translation on the next line.',
-    'Localize the three section headings into the output language. Keep the whole reply under 160 words, use bold sparingly, and never output raw HTML or Markdown tables.',
+    '(3) usage summary — a compact summary of how the senses differ; do not repeat the per-sense examples here.',
+    'senseExamples must contain exactly one item for every supplied Chinese sense and every supplied English sense.',
+    'Match each item by its language and zero-based senseIndex. The English sentence must naturally demonstrate that exact sense and use the target word (an inflected form is allowed).',
+    'Each translation must faithfully translate that sentence into the requested output language.',
+    'Localize the three Markdown section headings into the output language. Keep coachMarkdown under 150 words, use bold sparingly, and never output raw HTML or Markdown tables.',
     `Respond in ${outputLanguage}.`,
   ].join(' ');
 
-  return requestCompletion(config, [
+  const content = await requestCompletion(config, [
     { role: 'system', content: systemPrompt },
-    { role: 'user', content: JSON.stringify(word) },
-  ]);
+    {
+      role: 'user',
+      content: JSON.stringify({
+        word,
+        chineseSenses: chineseSenses.map((sense, senseIndex) => ({ senseIndex, ...sense })),
+        englishSenses: englishSenses.map((sense, senseIndex) => ({ senseIndex, ...sense })),
+      }),
+    },
+  ], fetch, {
+    temperature: 0.35,
+    maxTokens: 1600,
+    responseFormat: wordExplanationResponseFormat(),
+  });
+  return parseWordExplanation(content, chineseSenses.length, englishSenses.length);
 }

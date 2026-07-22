@@ -25,12 +25,21 @@ export const MODE_TIME_LIMITS: Record<GameMode, number> = {
 
 export const AUTO_ADVANCE_DELAY_MS = 3_000;
 
+export function resolveTimeoutSubmission(
+  draft: SessionAnswer | null,
+): readonly [boolean, string, string?] {
+  return draft
+    ? [draft.correct, draft.response, draft.correctAnswer]
+    : [false, ''];
+}
+
 export function createGameSession(
   queue: AdaptiveStudyItem[],
   now = Date.now(),
 ): GameSessionState {
   return {
     queue,
+    results: [],
     index: 0,
     correctCount: 0,
     phase: queue.length > 0 ? 'preview' : 'complete',
@@ -62,8 +71,12 @@ export function answerCurrentQuestion(
   answer: SessionAnswer,
 ): GameSessionState {
   if (state.phase !== 'asking') return state;
+  const item = state.queue[state.index];
   return {
     ...state,
+    results: item
+      ? [...state.results, { word: item.word, mode: item.mode, answer }]
+      : state.results,
     correctCount: state.correctCount + (answer.correct ? 1 : 0),
     phase: 'answered',
     answer,

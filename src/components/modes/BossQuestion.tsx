@@ -1,14 +1,15 @@
 import { useState } from 'react';
 import { Swords } from '../../icons';
-import type { WordEntry } from '../../domain/models';
+import type { SessionAnswer, WordEntry } from '../../domain/models';
 import { primarySense } from '../../domain/wordText';
 
 interface BossQuestionProps {
   word: WordEntry;
   onSubmit: (correct: boolean, response: string, correctAnswer: string) => void;
+  onDraftChange?: (draft: SessionAnswer | null) => void;
 }
 
-export function BossQuestion({ word, onSubmit }: BossQuestionProps) {
+export function BossQuestion({ word, onSubmit, onDraftChange }: BossQuestionProps) {
   const [response, setResponse] = useState('');
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -29,7 +30,16 @@ export function BossQuestion({ word, onSubmit }: BossQuestionProps) {
         <input
           id="boss-answer"
           value={response}
-          onChange={(event) => setResponse(event.target.value)}
+          onChange={(event) => {
+            const next = event.target.value;
+            const answer = next.trim();
+            setResponse(next);
+            onDraftChange?.(answer ? {
+              correct: answer.toLowerCase() === word.word.toLowerCase(),
+              response: answer,
+              correctAnswer: word.word,
+            } : null);
+          }}
           autoComplete="off"
           autoCapitalize="none"
           spellCheck={false}

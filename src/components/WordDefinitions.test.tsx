@@ -25,4 +25,39 @@ describe('WordDefinitions', () => {
     expect(html).toContain('<blockquote>');
     expect(html).toContain('<footer>房间里仍然很安静。</footer>');
   });
+
+  it('renders the matching example directly under each sense', () => {
+    const html = renderToStaticMarkup(
+      <WordDefinitions
+        word={word}
+        senseExamples={[
+          {
+            language: 'zh',
+            senseIndex: 0,
+            sentence: 'The room was completely still.',
+            translation: '房间里一片寂静。',
+          },
+          {
+            language: 'en',
+            senseIndex: 1,
+            sentence: 'She is still waiting outside.',
+            translation: '她仍在外面等候。',
+          },
+        ]}
+        exampleStatus="success"
+      />,
+    );
+
+    expect(html).toContain('class="sense-example"');
+    expect(html).toContain('The room was completely still.');
+    expect(html).toContain('她仍在外面等候。');
+    expect(html).toContain('此义项暂缺例句。');
+  });
+
+  it('explains how examples become available without AI', () => {
+    const html = renderToStaticMarkup(
+      <WordDefinitions word={word} exampleStatus="unavailable" />,
+    );
+    expect(html).toContain('连接 AI 后生成此义项的用法例句。');
+  });
 });

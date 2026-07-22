@@ -42,6 +42,20 @@ export interface WordEntry {
   sourceTags?: string[];
 }
 
+export type DefinitionLanguage = 'zh' | 'en';
+
+export interface WordSenseExample {
+  language: DefinitionLanguage;
+  senseIndex: number;
+  sentence: string;
+  translation: string;
+}
+
+export interface WordExplanation {
+  markdown: string;
+  senseExamples: WordSenseExample[];
+}
+
 export interface WordBank {
   id: BankId;
   name: string;
@@ -104,6 +118,12 @@ export interface SessionAnswer {
   correctAnswer: string;
 }
 
+export interface SessionResult {
+  word: WordEntry;
+  mode: GameMode;
+  answer: SessionAnswer;
+}
+
 export interface AdaptiveStudyItem {
   word: WordEntry;
   mode: GameMode;
@@ -146,6 +166,7 @@ export interface ChainBlueprint {
 
 export interface GameSessionState {
   queue: AdaptiveStudyItem[];
+  results: SessionResult[];
   index: number;
   correctCount: number;
   phase: SessionPhase;

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Moon, Sparkles, Sun, Volume2 } from './icons';
-import logoEnglish from './assets/logo-english.webp';
+import { Moon, Sparkles, Sun, Trophy, Volume2 } from './icons';
+import logo from './assets/logo2.webp';
+import { AchievementDialog } from './components/AchievementDialog';
+import { AchievementToast } from './components/AchievementToast';
 import { AiSettingsDialog } from './components/AiSettingsDialog';
 import { BattleRecord } from './components/BattleRecord';
 import { Dashboard } from './components/Dashboard';
@@ -23,7 +25,12 @@ import {
   resolveLevelCompletionAction,
 } from './domain/journey';
 import { getClearedLevelNumberSet } from './domain/gameProgress';
-import type { AdaptiveStudyItem, BankId, WordEntry } from './domain/models';
+import type {
+  AdaptiveStudyItem,
+  BankId,
+  WordEntry,
+  WordSenseExample,
+} from './domain/models';
 import type { ChallengeDifficulty } from './domain/progress';
 import {
   applyBoost,
@@ -38,6 +45,7 @@ import {
   type BoostId,
 } from './domain/challengeBoosts';
 import { useAiConnection } from './hooks/useAiConnection';
+import { useAchievements } from './hooks/useAchievements';
 import { useBankCoverage } from './hooks/useBankCoverage';
 import { useCombat } from './hooks/useCombat';
 import { useGameProgress } from './hooks/useGameProgress';
@@ -49,14 +57,32 @@ import type { AiConnectionConfig } from './services/aiClient';
 
 type Theme = 'light' | 'dark';
 
+const THEME_KEY = 'wordbuddy.theme.v1';
+const THEME_COLORS: Record<Theme, string> = {
+  light: '#fdefd6',
+  dark: '#171531',
+};
+
 interface AiInsight {
   wordId: string;
   status: 'loading' | 'success' | 'error';
   text: string;
+  senseExamples: WordSenseExample[];
 }
 
 function currentTheme(): Theme {
   return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+}
+
+function applyTheme(theme: Theme): void {
+  document.documentElement.setAttribute('data-theme', theme);
+  document.documentElement.style.colorScheme = theme === 'dark' ? 'dark' : 'only light';
+  document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
+    ?.setAttribute('content', THEME_COLORS[theme]);
+  document.querySelector<HTMLMetaElement>('meta[name="color-scheme"]')
+    ?.setAttribute('content', theme === 'dark' ? 'dark' : 'only light');
+  document.querySelector<HTMLMetaElement>('meta[name="supported-color-schemes"]')
+    ?.setAttribute('content', theme === 'dark' ? 'dark' : 'light');
 }
 
 const DIFFICULTY_KEY = 'wordbuddy.challenge.difficulty.v1';
@@ -93,6 +119,7 @@ export default function WordBuddyApp() {
   const [boostOffers, setBoostOffers] = useState<BoostDef[]>([]);
   const [droppedBoostName, setDroppedBoostName] = useState<string | null>(null);
   const [pendingBoostPenalty, setPendingBoostPenalty] = useState(false);
+  const [achievementsOpen, setAchievementsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [speechSettingsOpen, setSpeechSettingsOpen] = useState(false);
   const [sessionPreparing, setSessionPreparing] = useState(false);
@@ -125,6 +152,15 @@ export default function WordBuddyApp() {
   const speech = useSpeech();
   const combat = useCombat();
   const gameProgress = useGameProgress();
+  const achievementSnapshot = {
+    gameProgress: gameProgress.progress,
+    learningStats: stats,
+    activeBoosts,
+  };
+  const achievements = useAchievements(
+    achievementSnapshot,
+    progressHydrated && gameProgress.hydrated,
+  );
   const recordBattle = gameProgress.recordBattle;
   const finishCombat = combat.finishCombat;
   const boostFx = boostEffects(activeBoosts);
@@ -358,6 +394,11 @@ export default function WordBuddyApp() {
     combat.chooseSkill('steady');
   }
 
+  function handleContinueWithBoosts() {
+    setDroppedBoostName(null);
+    combat.chooseSkill('steady');
+  }
+
   function handleLevelCompleteAction() {
     if (completionAction === 'finished') {
       handleStopSession();
@@ -371,20 +412,31 @@ export default function WordBuddyApp() {
 
   function toggleTheme() {
     const nextTheme = theme === 'light' ? 'dark' : 'light';
-    document.documentElement.setAttribute('data-theme', nextTheme);
+    applyTheme(nextTheme);
+    try {
+      window.localStorage.setItem(THEME_KEY, nextTheme);
+    } catch {
+      // Storage may be unavailable; the in-memory choice still applies.
+    }
     setTheme(nextTheme);
   }
 
   async function runAiExplanation(word: WordEntry, override?: AiConnectionConfig) {
-    setAiInsight({ wordId: word.id, status: 'loading', text: '' });
+    setAiInsight({ wordId: word.id, status: 'loading', text: '', senseExamples: [] });
     try {
-      const text = await requestExplanation(word, override);
-      setAiInsight({ wordId: word.id, status: 'success', text });
+      const explanation = await requestExplanation(word, override);
+      setAiInsight({
+        wordId: word.id,
+        status: 'success',
+        text: explanation.markdown,
+        senseExamples: explanation.senseExamples,
+      });
     } catch (error) {
       setAiInsight({
         wordId: word.id,
         status: 'error',
         text: error instanceof Error ? error.message : 'AI 讲解请求失败。',
+        senseExamples: [],
       });
     }
   }
@@ -433,11 +485,11 @@ export default function WordBuddyApp() {
       {!session && (
       <header className="app-header is-home">
         <div className="page-width header-inner">
-          <button type="button" className="brand-button" onClick={handleStopSession} aria-label="图图是卷王 · 暴打单词怪 返回首页">
+          <button type="button" className="brand-button" onClick={handleStopSession} aria-label="我是卷王 · 暴打单词怪 返回首页">
             <img
               className="brand-logo"
-              src={logoEnglish}
-              alt="图图是卷王 · 暴打单词怪"
+              src={logo}
+              alt="我是卷王 · 暴打单词怪"
             />
           </button>
           <BattleRecord
@@ -464,6 +516,18 @@ export default function WordBuddyApp() {
               <option value="hardcore">硬核</option>
             </select>
             <span className="today-count">今日 {stats.today} 题</span>
+            <button
+              type="button"
+              className="icon-button achievement-button"
+              onClick={() => setAchievementsOpen(true)}
+              aria-label={`卷王成就：已达成 ${achievements.unlockedCount} 项`}
+              title="卷王成就"
+            >
+              <Trophy aria-hidden="true" />
+              {achievements.unlockedCount > 0 && (
+                <span aria-hidden="true">{achievements.unlockedCount}</span>
+              )}
+            </button>
             <button
               type="button"
               className="icon-button"
@@ -503,6 +567,7 @@ export default function WordBuddyApp() {
           offers={boostOffers}
           droppedBoostName={droppedBoostName}
           onChoose={handleChooseBoost}
+          onContinue={handleContinueWithBoosts}
           onExit={handleStopSession}
         />
       ) : session ? (
@@ -590,6 +655,16 @@ export default function WordBuddyApp() {
         onPreview={speech.speak}
         onSave={handleSaveVoice}
         onStop={speech.stop}
+      />
+      <AchievementDialog
+        open={achievementsOpen}
+        state={achievements.state}
+        snapshot={achievementSnapshot}
+        onClose={() => setAchievementsOpen(false)}
+      />
+      <AchievementToast
+        achievement={achievements.currentAchievement}
+        onDismiss={achievements.dismissCurrent}
       />
     </div>
   );

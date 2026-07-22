@@ -4,6 +4,7 @@ import {
   explainWord,
   generateChainReading,
   parseChainReading,
+  parseWordExplanation,
   requestCompletion,
   resolveCompletionUrl,
 } from './aiClient';
@@ -87,14 +88,22 @@ describe('AI client', () => {
     expect(request?.headers).toMatchObject({ 'api-key': 'session-secret' });
   });
 
-  it('requests structured Markdown in the selected output language', async () => {
+  it('requests structured coaching and per-sense examples in the selected output language', async () => {
+    const explanation = {
+      coachMarkdown: '### Memory cue\n\n**Achieve** a goal.',
+      senseExamples: [
+        { language: 'zh', senseIndex: 0, sentence: 'She achieved her goal.', translation: '彼女は目標を達成した。' },
+        { language: 'zh', senseIndex: 1, sentence: 'The team achieved success.', translation: 'チームは成功を収めた。' },
+        { language: 'en', senseIndex: 0, sentence: 'Practice helps you achieve more.', translation: '練習はより多くを達成する助けになる。' },
+      ],
+    };
     const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
-      choices: [{ message: { content: '### Memory cue\n\n**Achieve** a goal.' } }],
+      choices: [{ message: { content: JSON.stringify(explanation) } }],
     }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
     vi.stubGlobal('fetch', fetcher);
 
     try {
-      await explainWord({
+      const result = await explainWord({
         ...DEFAULT_AI_CONFIG,
         apiKey: 'session-secret',
         outputLanguage: 'Japanese',
@@ -106,9 +115,24 @@ describe('AI client', () => {
       expect(systemPrompt).toContain('exactly three level-3');
       expect(systemPrompt).toContain('raw HTML');
       expect(systemPrompt).toContain('Respond in Japanese.');
+      expect(body.response_format.json_schema.name).toBe('wordbuddy_word_explanation');
+      expect(result.markdown).toContain('Memory cue');
+      expect(result.senseExamples).toHaveLength(3);
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+
+  it('rejects a word explanation that misses a displayed sense', () => {
+    const content = JSON.stringify({
+      coachMarkdown: '### 记忆\n\n提示',
+      senseExamples: [
+        { language: 'zh', senseIndex: 0, sentence: 'She achieved her goal.', translation: '她实现了目标。' },
+      ],
+    });
+
+    expect(() => parseWordExplanation(content, 2, 1))
+      .toThrow('AI 未给出中文第 2 个义项的例句');
   });
 
   it('generates a natural reading and reports the words it used', async () => {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   AdaptiveStudyItem,
   AnswerRecord,
@@ -34,7 +34,7 @@ export function useGameSession(
   const [autoAdvanceRemainingMs, setAutoAdvanceRemainingMs] = useState(AUTO_ADVANCE_DELAY_MS);
   const [autoAdvancePaused, setAutoAdvancePaused] = useState(false);
   const [assessmentWordIds, setAssessmentWordIds] = useState<Set<string>>(() => new Set());
-  const [results, setResults] = useState<Record<string, boolean>>({});
+  const submittedQuestionRef = useRef<string | null>(null);
 
   // Runtime capabilities are applied at serve time as well as persisted into the
   // queue so a voice failure cannot expose even one render of an unusable task.
@@ -61,7 +61,7 @@ export function useGameSession(
     setAutoAdvanceRemainingMs(AUTO_ADVANCE_DELAY_MS);
     setAutoAdvancePaused(false);
     setAssessmentWordIds(new Set());
-    setResults({});
+    submittedQuestionRef.current = null;
     const nextSession = createGameSession(queue, startedAt);
     setSession(speechPlaybackAvailable
       ? nextSession
@@ -89,8 +89,14 @@ export function useGameSession(
     correctAnswer?: string,
   ) => {
     if (!session || session.phase !== 'asking') return;
+    const questionKey = `${session.startedAt}:${session.index}:${session.questionStartedAt}`;
+    if (submittedQuestionRef.current === questionKey) return;
+    submittedQuestionRef.current = questionKey;
     const item = applyRuntimeOverrides(session.queue[session.index] ?? null);
-    if (!item) return;
+    if (!item) {
+      submittedQuestionRef.current = null;
+      return;
+    }
     const { word, mode } = item;
 
     const answeredAt = Date.now();
@@ -115,7 +121,6 @@ export function useGameSession(
       response,
       correctAnswer: correctAnswer ?? correctAnswerFor(mode, word),
     }));
-    setResults((previous) => ({ ...previous, [word.id]: correct }));
     setAutoAdvanceRemainingMs(AUTO_ADVANCE_DELAY_MS);
     setAutoAdvancePaused(false);
   }, [applyRuntimeOverrides, onAnswerResolved, onRecord, session]);
@@ -136,12 +141,11 @@ export function useGameSession(
       setNow(timestamp);
       if (timestamp >= session.deadline) {
         window.clearInterval(interval);
-        submitAnswer(false, '');
       }
     }, 200);
 
     return () => window.clearInterval(interval);
-  }, [session, submitAnswer]);
+  }, [session]);
 
   useEffect(() => {
     if (!session || session.phase !== 'answered' || autoAdvancePaused) return undefined;
@@ -186,14 +190,18 @@ export function useGameSession(
     setAutoAdvanceRemainingMs(AUTO_ADVANCE_DELAY_MS);
     setAutoAdvancePaused(false);
     setAssessmentWordIds(new Set());
-    setResults({});
+    submittedQuestionRef.current = null;
   }, []);
 
   const currentItem = applyRuntimeOverrides(session?.queue[session.index] ?? null);
   const currentWord = currentItem?.word ?? null;
   const missedWordIds = useMemo(
-    () => new Set(Object.entries(results).filter(([, ok]) => !ok).map(([id]) => id)),
-    [results],
+    () => new Set(
+      (session?.results ?? [])
+        .filter((result) => !result.answer.correct)
+        .map((result) => result.word.id),
+    ),
+    [session?.results],
   );
   const remainingMs = session?.phase === 'asking'
     ? Math.max(0, session.deadline - now)

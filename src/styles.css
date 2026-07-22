@@ -1,5 +1,5 @@
 :root {
-  color-scheme: light;
+  color-scheme: only light;
   --cp-bg: #fdefd6;
   --cp-bg-elevated: #fff8ea;
   --cp-surface: #ffffff;
@@ -264,6 +264,27 @@ input:focus-visible {
 
 .ai-status-button.is-connected::after {
   background: var(--cp-success);
+}
+
+.achievement-button {
+  position: relative;
+}
+
+.achievement-button > span {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  display: grid;
+  min-width: 19px;
+  height: 19px;
+  place-items: center;
+  padding-inline: 4px;
+  border: 2px solid var(--cp-surface);
+  border-radius: 999px;
+  background: var(--cp-gold);
+  color: #2a2118;
+  font-size: 9px;
+  font-weight: 900;
 }
 
 .dashboard {
@@ -1557,6 +1578,38 @@ html[data-theme="dark"] .battle-passage-strip {
   gap: 3px;
 }
 
+.answer-advance-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.answer-auto-toggle {
+  display: inline-flex;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 2px solid var(--cp-outline);
+  border-radius: 12px;
+  background: var(--cp-surface);
+  box-shadow: 0 3px 0 var(--cp-outline);
+  color: var(--cp-text);
+  cursor: pointer;
+}
+
+.answer-auto-toggle:active {
+  translate: 0 3px;
+  box-shadow: none;
+}
+
+.answer-auto-toggle svg {
+  width: 18px;
+  height: 18px;
+}
+
 /* The auto-advance countdown drains around the primary button's border as a
    gradient ring; --advance (0-100) is fed in from React each tick. */
 .answer-advance-next {
@@ -1611,11 +1664,15 @@ html[data-theme="dark"] .battle-passage-strip {
    AI coach card, which gets the majority of the width. */
 .answer-columns {
   display: grid;
-  grid-template-columns: minmax(280px, 1fr) minmax(0, 1.7fr);
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.62fr);
   gap: 12px 18px;
   flex: 1 1 auto;
   min-height: 0;
   align-items: stretch;
+}
+
+.answer-columns.has-ai {
+  grid-template-columns: minmax(280px, 1fr) minmax(0, 1.7fr);
 }
 
 .answer-columns > * {
@@ -1687,27 +1744,6 @@ html[data-theme="dark"] .battle-passage-strip {
   margin: 0;
 }
 
-.answer-def-example {
-  margin: 12px 0 0;
-  padding: 8px 11px;
-  border-left: 3px solid var(--cp-accent);
-  border-radius: 0 8px 8px 0;
-  background: var(--cp-surface);
-  font-size: 13px;
-}
-
-.answer-def-example p {
-  margin: 0;
-  color: var(--cp-text);
-  line-height: 1.5;
-}
-
-.answer-def-example footer {
-  margin-top: 4px;
-  color: var(--cp-text-muted);
-  font-size: 12px;
-}
-
 .answer-ai-col {
   display: flex;
   flex-direction: column;
@@ -1717,6 +1753,15 @@ html[data-theme="dark"] .battle-passage-strip {
   border: 1px solid var(--cp-border);
   border-radius: 12px;
   background: var(--cp-surface-soft);
+}
+
+.answer-ai-col.is-feedback-only {
+  align-self: start;
+}
+
+.answer-ai-col.is-feedback-only .answer-ai-result {
+  padding-bottom: 0;
+  border-bottom: 0;
 }
 
 .answer-ai-head {
@@ -1883,8 +1928,11 @@ html[data-theme="dark"] .battle-passage-strip {
   .answer-ai-body {
     max-height: 44vh;
   }
-  .answer-banner .answer-word-heading {
-    margin-left: 0;
+  .answer-columns:not(.has-ai) .answer-ai-col {
+    grid-row: 1;
+  }
+  .answer-columns:not(.has-ai) .answer-def-card {
+    grid-row: 2;
   }
   .answer-advance {
     align-items: flex-start;
@@ -1918,6 +1966,8 @@ html[data-theme="dark"] .battle-passage-strip {
 
 .battle-scene.is-preview .battle-action-panel {
   max-height: none;
+  flex: 0 0 auto;
+  padding-bottom: calc(clamp(56px, 9vh, 88px) + env(safe-area-inset-bottom));
 }
 
 .combat-hud {
@@ -1936,7 +1986,7 @@ html[data-theme="dark"] .battle-passage-strip {
   flex: 0 0 auto;
   display: grid;
   min-height: 68px;
-  grid-template-columns: minmax(125px, 0.9fr) minmax(120px, 0.8fr) auto auto auto;
+  grid-template-columns: auto minmax(125px, 0.9fr) minmax(120px, 0.8fr) auto auto;
   align-items: center;
   gap: 12px;
   margin: 12px 14px 0;
@@ -1956,7 +2006,7 @@ html[data-theme="dark"] .battle-header {
   align-items: center;
   gap: 5px;
   padding: 7px 9px;
-  justify-self: end;
+  justify-self: start;
   border: 1px solid rgba(36, 36, 74, 0.28);
   border-radius: 9px;
   background: rgba(255, 255, 255, 0.34);
@@ -3054,7 +3104,8 @@ html[data-theme="dark"] .battle-header {
 
 .app-shell.is-challenge .practice-page.is-complete {
   display: grid;
-  place-items: center;
+  justify-items: center;
+  align-content: start;
   overflow: auto;
   padding: 20px;
 }
@@ -3200,6 +3251,34 @@ html[data-theme="dark"] .battle-header {
   font-weight: 700;
 }
 
+.boost-maxed-state {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  width: min(520px, 100%);
+  margin: 26px auto 0;
+  padding: 22px 18px 6px;
+  border-top: 1px solid var(--cp-border);
+  text-align: center;
+}
+
+.boost-maxed-state > strong {
+  color: var(--cp-text);
+  font-size: 21px;
+}
+
+.boost-maxed-state > p {
+  max-width: 420px;
+  margin: 0;
+  color: var(--cp-text-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.boost-maxed-state .primary-button {
+  margin-top: 6px;
+}
+
 .roster-word.is-masked {
   color: var(--cp-warning);
   letter-spacing: 0;
@@ -3289,7 +3368,7 @@ html[data-theme="dark"] .battle-header {
 
 .definition-senses {
   display: grid;
-  gap: 7px;
+  gap: 12px;
   margin: 0;
   padding-left: 24px;
 }
@@ -3323,6 +3402,53 @@ html[data-theme="dark"] .battle-header {
   font-family: Consolas, "Courier New", Courier, monospace;
   font-size: 11px;
   font-weight: 700;
+}
+
+.sense-example {
+  margin: 7px 0 0;
+  padding: 8px 10px;
+  border-left: 3px solid var(--cp-success);
+  border-radius: 0 7px 7px 0;
+  background: var(--cp-surface);
+}
+
+.sense-example p,
+.sense-example footer,
+.sense-example-status {
+  margin: 0;
+}
+
+.sense-example p {
+  color: var(--cp-text);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.5;
+}
+
+.sense-example footer {
+  margin-top: 3px;
+  color: var(--cp-text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.sense-example-status {
+  margin-top: 6px;
+  padding-left: 9px;
+  border-left: 2px solid var(--cp-border-strong);
+  color: var(--cp-text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.sense-example-status.is-loading {
+  border-left-color: var(--cp-link);
+  color: var(--cp-link);
+}
+
+.sense-example-status.is-error {
+  border-left-color: var(--cp-danger);
+  color: var(--cp-danger);
 }
 
 .word-example blockquote {
@@ -3680,6 +3806,137 @@ html[data-theme="dark"] .battle-header {
   margin-top: 18px;
 }
 
+.mistake-review {
+  width: min(980px, 100%);
+  margin: 28px auto 48px;
+  text-align: left;
+}
+
+.mistake-review-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.mistake-review-heading .eyebrow,
+.mistake-review-heading h2 {
+  margin: 0;
+}
+
+.mistake-review-heading h2 {
+  margin-top: 3px;
+  font-size: 24px;
+}
+
+.mistake-review-heading > strong {
+  padding: 5px 11px;
+  border: 1px solid var(--cp-border);
+  border-radius: 999px;
+  background: var(--cp-surface-soft);
+  color: var(--cp-danger);
+  font-size: 12px;
+}
+
+.mistake-review-list {
+  display: grid;
+  gap: 14px;
+}
+
+.mistake-review-item {
+  padding: 16px 18px;
+  border: 2px solid var(--cp-outline);
+  border-radius: 14px;
+  background: var(--cp-surface);
+  box-shadow: 0 3px 0 var(--cp-outline);
+}
+
+.mistake-review-item > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 11px;
+  border-bottom: 1px solid var(--cp-border);
+}
+
+.mistake-review-word {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 7px;
+}
+
+.mistake-review-word strong {
+  color: var(--cp-text);
+  font-size: 21px;
+}
+
+.mistake-review-word span {
+  color: var(--cp-text-muted);
+  font-size: 13px;
+}
+
+.mistake-review-word small,
+.mistake-mode {
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: var(--cp-surface-soft);
+  color: var(--cp-text-muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.mistake-answer-comparison {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px;
+  margin-top: 13px;
+}
+
+.mistake-answer-comparison > div {
+  min-width: 0;
+  padding: 11px 13px;
+  border-left: 3px solid var(--cp-border-strong);
+  background: var(--cp-surface-soft);
+}
+
+.mistake-answer-comparison > .is-correct {
+  border-left-color: var(--cp-success);
+}
+
+.mistake-answer-comparison > .is-player {
+  border-left-color: var(--cp-danger);
+}
+
+.mistake-answer-comparison span {
+  color: var(--cp-text-muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.mistake-answer-comparison p {
+  margin: 5px 0 0;
+  color: var(--cp-text);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.mistake-answer-comparison small {
+  display: block;
+  margin-top: 7px;
+  color: var(--cp-text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+@media (max-width: 680px) {
+  .mistake-answer-comparison {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .app-footer {
   display: flex;
   justify-content: space-between;
@@ -3714,6 +3971,280 @@ html[data-theme="dark"] .battle-header {
 
 .speech-settings-dialog {
   width: min(560px, 100%);
+}
+
+.achievement-dialog {
+  width: min(900px, 100%);
+}
+
+.achievement-dialog-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 22px;
+  border-bottom: 1px solid var(--cp-border);
+  background: var(--cp-panel-strong);
+}
+
+.achievement-dialog-header > div,
+.achievement-dialog-mark {
+  display: flex;
+  align-items: center;
+}
+
+.achievement-dialog-header > div {
+  gap: 12px;
+}
+
+.achievement-dialog-header h2,
+.achievement-dialog-header p {
+  margin: 0;
+}
+
+.achievement-dialog-header h2 {
+  font-size: 21px;
+}
+
+.achievement-dialog-header p {
+  margin-top: 3px;
+  color: var(--cp-text-muted);
+  font-size: 12px;
+}
+
+.achievement-dialog-mark {
+  width: 40px;
+  height: 40px;
+  justify-content: center;
+  border-radius: 10px;
+  background: rgba(246, 173, 15, 0.16);
+  color: var(--cp-gold);
+}
+
+.achievement-dialog-mark svg {
+  width: 22px;
+  height: 22px;
+}
+
+.achievement-overview {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: baseline;
+  gap: 2px 9px;
+  padding: 17px 22px 0;
+}
+
+.achievement-overview > strong {
+  color: var(--cp-text);
+  font-size: 22px;
+}
+
+.achievement-overview > span {
+  color: var(--cp-text-muted);
+  font-size: 12px;
+}
+
+.achievement-overview-track,
+.achievement-progress {
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--cp-border);
+}
+
+.achievement-overview-track {
+  grid-column: 1 / -1;
+  height: 6px;
+  margin-top: 7px;
+}
+
+.achievement-overview-track > span,
+.achievement-progress > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--cp-accent), var(--cp-gold));
+}
+
+.achievement-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 18px 22px 24px;
+}
+
+.achievement-item {
+  display: flex;
+  min-height: 130px;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--cp-border);
+  border-radius: 10px;
+  background: var(--cp-surface-soft);
+  opacity: 0.68;
+}
+
+.achievement-item.is-unlocked {
+  border-color: var(--cp-border-strong);
+  background: var(--cp-surface);
+  box-shadow: 0 2px 0 var(--cp-border-strong);
+  opacity: 1;
+}
+
+.achievement-item-icon,
+.achievement-toast-icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--cp-surface);
+  color: var(--cp-text-muted);
+}
+
+.achievement-item-icon {
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--cp-border);
+}
+
+.achievement-item-icon svg {
+  width: 21px;
+  height: 21px;
+}
+
+.achievement-item.is-unlocked.tier-bronze .achievement-item-icon { color: #b76a3d; }
+.achievement-item.is-unlocked.tier-silver .achievement-item-icon { color: #64748b; }
+.achievement-item.is-unlocked.tier-gold .achievement-item-icon { color: var(--cp-gold); }
+
+.achievement-item-body {
+  display: grid;
+  min-width: 0;
+  flex: 1 1 auto;
+  gap: 7px;
+}
+
+.achievement-item-body > div:first-child {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.achievement-item-body strong {
+  color: var(--cp-text);
+  font-size: 14px;
+}
+
+.achievement-item-body > div:first-child > span {
+  color: var(--cp-text-muted);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.achievement-item-body p {
+  margin: 0;
+  color: var(--cp-text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.achievement-progress {
+  height: 5px;
+  margin-top: auto;
+}
+
+.achievement-toast {
+  position: fixed;
+  z-index: 90;
+  top: max(18px, env(safe-area-inset-top));
+  left: 50%;
+  display: grid;
+  width: min(420px, calc(100% - 28px));
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  translate: -50% 0;
+  padding: 14px 14px 14px 16px;
+  border: 2px solid var(--cp-outline);
+  border-radius: 14px;
+  background: var(--cp-panel-strong);
+  box-shadow: var(--cp-shadow), 0 4px 0 var(--cp-outline);
+  animation: achievement-toast-enter 360ms ease-out both;
+}
+
+.achievement-toast-icon {
+  width: 48px;
+  height: 48px;
+  background: rgba(246, 173, 15, 0.16);
+  color: var(--cp-gold);
+}
+
+.achievement-toast-icon svg {
+  width: 25px;
+  height: 25px;
+}
+
+.achievement-toast small,
+.achievement-toast strong,
+.achievement-toast p {
+  display: block;
+  margin: 0;
+}
+
+.achievement-toast small {
+  color: var(--cp-accent);
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.achievement-toast strong {
+  margin-top: 1px;
+  color: var(--cp-text);
+  font-size: 18px;
+}
+
+.achievement-toast p {
+  margin-top: 3px;
+  color: var(--cp-text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.achievement-toast > button {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--cp-text-muted);
+  cursor: pointer;
+}
+
+.achievement-toast > button svg {
+  width: 17px;
+  height: 17px;
+}
+
+@keyframes achievement-toast-enter {
+  from { opacity: 0; translate: -50% -18px; }
+  to { opacity: 1; translate: -50% 0; }
+}
+
+@media (max-width: 720px) {
+  .achievement-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .achievement-toast {
+    animation: none;
+  }
 }
 
 .dialog-heading {
@@ -3958,7 +4489,7 @@ html[data-theme="dark"] .battle-header {
   .app-header.is-home .header-inner {
     min-height: 0;
     grid-template-columns: 1fr;
-    padding-top: 44px;
+    padding-top: 54px;
   }
 
   .app-header.is-home .brand-logo {
@@ -4207,12 +4738,22 @@ html[data-theme="dark"] .battle-header {
   }
 
   .battle-exit-button {
-    grid-column: 3;
+    grid-column: 1;
     grid-row: 1;
     width: 36px;
     min-height: 34px;
     justify-content: center;
     padding: 6px;
+  }
+
+  .battle-header-title {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .battle-question-progress {
+    grid-column: 3;
+    grid-row: 1;
   }
 
   .battle-header-title strong {
@@ -4224,12 +4765,12 @@ html[data-theme="dark"] .battle-header {
   }
 
   .player-status {
-    grid-column: 1 / 2;
+    grid-column: 2;
     grid-row: 2;
   }
 
   .combo-status {
-    grid-column: 2 / 3;
+    grid-column: 3;
     grid-row: 2;
   }
 

@@ -1,4 +1,4 @@
-import { EyeOff, Hash, Zap } from '../icons';
+import { ArrowRight, Crown, EyeOff, Hash, Zap } from '../icons';
 import {
   BOOST_DEFS,
   boostStacks,
@@ -13,6 +13,7 @@ interface ChallengePrepProps {
   offers: BoostDef[];
   droppedBoostName: string | null;
   onChoose: (boostId: BoostId) => void;
+  onContinue: () => void;
   onExit: () => void;
 }
 
@@ -28,6 +29,7 @@ export function ChallengePrep({
   offers,
   droppedBoostName,
   onChoose,
+  onContinue,
   onExit,
 }: ChallengePrepProps) {
   const owned = BOOST_DEFS.filter((def) => boostStacks(activeBoosts, def.id) > 0);
@@ -60,30 +62,41 @@ export function ChallengePrep({
           </div>
         )}
 
-        <div className="skill-grid">
-          {offers.map((def) => {
-            const BoostIcon = BOOST_ICONS[def.id];
-            const stacks = boostStacks(activeBoosts, def.id);
-            return (
-              <button
-                key={def.id}
-                type="button"
-                className={`skill-card is-boost is-${def.id}`}
-                onClick={() => onChoose(def.id)}
-              >
-                <span className="skill-icon"><BoostIcon aria-hidden="true" /></span>
-                <strong>{def.name}</strong>
-                <p>{def.description}</p>
-                <small>
-                  {def.stackable
-                    ? `可叠加 · 当前 ${stacks}/${def.maxStacks}`
-                    : '一次性强化'}
-                </small>
-                <b>选择加成</b>
-              </button>
-            );
-          })}
-        </div>
+        {offers.length > 0 ? (
+          <div className="skill-grid">
+            {offers.map((def) => {
+              const BoostIcon = BOOST_ICONS[def.id];
+              const stacks = boostStacks(activeBoosts, def.id);
+              return (
+                <button
+                  key={def.id}
+                  type="button"
+                  className={`skill-card is-boost is-${def.id}`}
+                  onClick={() => onChoose(def.id)}
+                >
+                  <span className="skill-icon"><BoostIcon aria-hidden="true" /></span>
+                  <strong>{def.name}</strong>
+                  <p>{def.description}</p>
+                  <small>
+                    {def.stackable
+                      ? `可叠加 · 当前 ${stacks}/${def.maxStacks}`
+                      : '一次性强化'}
+                  </small>
+                  <b>选择加成</b>
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="boost-maxed-state" role="status">
+            <span className="skill-icon"><Crown aria-hidden="true" /></span>
+            <strong>你是卷王</strong>
+            <p>所有难度加成都已达到上限，本轮将保持当前强度继续挑战。</p>
+            <button type="button" className="primary-button" onClick={onContinue}>
+              保持当前强度开战 <ArrowRight aria-hidden="true" />
+            </button>
+          </div>
+        )}
       </section>
     </main>
   );

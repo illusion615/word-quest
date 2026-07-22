@@ -30,6 +30,7 @@ export { default as Star } from 'lucide-react/dist/esm/icons/star.mjs';
 export { default as Sun } from 'lucide-react/dist/esm/icons/sun.mjs';
 export { default as Swords } from 'lucide-react/dist/esm/icons/swords.mjs';
 export { default as Target } from 'lucide-react/dist/esm/icons/target.mjs';
+export { default as Trophy } from 'lucide-react/dist/esm/icons/trophy.mjs';
 export { default as Volume2 } from 'lucide-react/dist/esm/icons/volume-2.mjs';
 export { default as X } from 'lucide-react/dist/esm/icons/x.mjs';
 export { default as XCircle } from 'lucide-react/dist/esm/icons/circle-x.mjs';

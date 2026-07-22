@@ -53,6 +53,11 @@ describe('challengeBoosts', () => {
     expect(offers.map((o) => o.id)).toEqual(['haste']);
   });
 
+  it('returns an empty offer list when every boost is maxed', () => {
+    const active: ActiveBoosts = { haste: 5, silentWord: 1, hiddenCount: 1 };
+    expect(drawBoostOffers(active, 3, seeded([0]))).toEqual([]);
+  });
+
   it('drops a random owned boost and removes empty entries', () => {
     const active: ActiveBoosts = { haste: 1, silentWord: 1 };
     const { next, dropped } = dropRandomBoost(active, seeded([0]));

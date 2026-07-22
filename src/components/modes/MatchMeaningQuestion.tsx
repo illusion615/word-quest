@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Volume2 } from '../../icons';
-import type { WordEntry } from '../../domain/models';
+import type { SessionAnswer, WordEntry } from '../../domain/models';
+import type { MeaningOption } from '../../domain/challenge';
 import {
   buildMeaningOptions,
   correctMeaningIds,
@@ -14,6 +15,7 @@ interface MatchMeaningQuestionProps {
   isSpeaking: boolean;
   onSpeak: (text: string) => void;
   onSubmit: (correct: boolean, response: string, correctAnswer: string) => void;
+  onDraftChange?: (draft: SessionAnswer | null) => void;
   hideAnswerCount?: boolean;
 }
 
@@ -28,6 +30,7 @@ export function MatchMeaningQuestion({
   isSpeaking,
   onSpeak,
   onSubmit,
+  onDraftChange,
   hideAnswerCount = false,
 }: MatchMeaningQuestionProps) {
   const options = useMemo(() => buildMeaningOptions(word, entries), [word, entries]);
@@ -35,26 +38,34 @@ export function MatchMeaningQuestion({
 
   useEffect(() => {
     setSelected(new Set());
+    onDraftChange?.(null);
     if (isSpeechSupported) onSpeak(word.word);
-  }, [isSpeechSupported, onSpeak, word.word]);
+  }, [isSpeechSupported, onDraftChange, onSpeak, word.word]);
+
+  function submissionFor(selection: Set<string>): SessionAnswer {
+    const correct = gradeMeaningSelection(options, selection);
+    const chosen = options
+      .filter((option: MeaningOption) => selection.has(option.id))
+      .map((option: MeaningOption) => option.text)
+      .join('、') || '未选择';
+    const answer = options
+      .filter((option: MeaningOption) => option.correct)
+      .map((option: MeaningOption) => option.text)
+      .join('、');
+    return { correct, response: chosen, correctAnswer: answer };
+  }
 
   function toggle(id: string) {
-    setSelected((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelected(next);
+    onDraftChange?.(next.size > 0 ? submissionFor(next) : null);
   }
 
   function handleSubmit() {
-    const correct = gradeMeaningSelection(options, selected);
-    const chosen = options
-      .filter((option) => selected.has(option.id))
-      .map((option) => option.text)
-      .join('、') || '未选择';
-    const answer = options.filter((option) => option.correct).map((option) => option.text).join('、');
-    onSubmit(correct, chosen, answer);
+    const submission = submissionFor(selected);
+    onSubmit(submission.correct, submission.response, submission.correctAnswer);
   }
 
   const correctCount = correctMeaningIds(options).length;

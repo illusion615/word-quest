@@ -1,19 +1,36 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
   <head>
+    <meta name="theme-color" content="#fdefd6" />
+    <meta name="color-scheme" content="only light" />
+    <meta name="supported-color-schemes" content="light" />
     <script>
       (() => {
-        const param = new URLSearchParams(window.location.search).get("scoutTheme");
-        const theme =
-          param || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+        const requested = new URLSearchParams(window.location.search).get("scoutTheme");
+        let saved = null;
+        try {
+          saved = window.localStorage.getItem("wordbuddy.theme.v1");
+        } catch {
+          // Storage can be unavailable in Safari private browsing.
+        }
+        const param = requested === "light" || requested === "dark" ? requested : null;
+        const preference = saved === "light" || saved === "dark" ? saved : null;
+        const theme = param || preference || "light";
+        const themeColor = theme === "dark" ? "#171531" : "#fdefd6";
+        const colorScheme = theme === "dark" ? "dark" : "only light";
         document.documentElement.setAttribute("data-theme", theme);
+        document.documentElement.style.colorScheme = colorScheme;
+        document.querySelector('meta[name="theme-color"]')?.setAttribute("content", themeColor);
+        document.querySelector('meta[name="color-scheme"]')?.setAttribute("content", colorScheme);
+        document.querySelector('meta[name="supported-color-schemes"]')
+          ?.setAttribute("content", theme === "dark" ? "dark" : "light");
       })();
     </script>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="description" content="图图是卷王 · 暴打单词怪 —— 卷天卷地的英语背单词闯关游戏" />
-    <title>图图是卷王 · 暴打单词怪</title>
+    <meta name="description" content="我是卷王 · 暴打单词怪 —— 卷天卷地的英语背单词闯关游戏" />
+    <title>我是卷王 · 暴打单词怪</title>
   </head>
   <body>
     <div id="root"></div>

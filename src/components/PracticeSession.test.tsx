@@ -2,10 +2,12 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { createCombatState } from '../domain/combat';
 import type { GameSessionState } from '../domain/models';
+import { TEST_WORDS } from '../test/fixtures/words';
 import { PracticeSession } from './PracticeSession';
 
 const completeSession: GameSessionState = {
   queue: [],
+  results: [],
   index: 0,
   correctCount: 0,
   phase: 'complete',
@@ -15,10 +17,13 @@ const completeSession: GameSessionState = {
   deadline: 0,
 };
 
-function renderCompletion(completionAction: 'next' | 'continue' | 'finished'): string {
+function renderCompletion(
+  completionAction: 'next' | 'continue' | 'finished',
+  session = completeSession,
+): string {
   return renderToStaticMarkup(
     <PracticeSession
-      session={completeSession}
+      session={session}
       currentItem={null}
       currentWord={null}
       currentChainItems={[]}
@@ -75,5 +80,25 @@ describe('PracticeSession completion actions', () => {
 
   it('returns to the map after the final level', () => {
     expect(renderCompletion('finished')).toContain('查看通关地图');
+  });
+
+  it('includes structured mistakes in the completed challenge', () => {
+    const session: GameSessionState = {
+      ...completeSession,
+      results: [{
+        word: TEST_WORDS[0],
+        mode: 'match-word',
+        answer: {
+          correct: false,
+          response: TEST_WORDS[1].word,
+          correctAnswer: TEST_WORDS[0].word,
+        },
+      }],
+    };
+
+    const html = renderCompletion('continue', session);
+    expect(html).toContain('错题巩固');
+    expect(html).toContain('实现；达成');
+    expect(html).toContain('你的答案');
   });
 });

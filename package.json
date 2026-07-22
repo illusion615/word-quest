@@ -16,6 +16,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "canvas-confetti": "^1.9.4",
     "idb-keyval": "^6.3.0",
     "lucide-react": "^1.24.0",
     "react": "^19.2.7",
@@ -25,6 +26,7 @@
     "ts-fsrs": "^5.4.1"
   },
   "devDependencies": {
+    "@types/canvas-confetti": "^1.9.0",
     "@types/node": "^24.13.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
@@ -35,7 +37,7 @@
     "vite": "^8.1.1",
     "vitest": "^4.1.10"
   },
-  "description": "图图是卷王 · 暴打单词怪——本地优先的英语背单词闯关游戏，支持 FSRS、AI 阅读理解语境和浏览器端学习记录。",
+  "description": "我是卷王 · 暴打单词怪——本地优先的英语背单词闯关游戏，支持 FSRS、AI 阅读理解语境和浏览器端学习记录。",
   "main": "index.js",
   "keywords": [],
   "author": "",

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Volume2 } from '../../icons';
-import type { WordEntry } from '../../domain/models';
+import type { SessionAnswer, WordEntry } from '../../domain/models';
 
 interface ListeningQuestionProps {
   word: WordEntry;
@@ -12,6 +12,7 @@ interface ListeningQuestionProps {
   onSpeak: (text: string) => void;
   onOpenSettings: () => void;
   onSubmit: (correct: boolean, response: string, correctAnswer: string) => void;
+  onDraftChange?: (draft: SessionAnswer | null) => void;
 }
 
 export function ListeningQuestion({
@@ -24,6 +25,7 @@ export function ListeningQuestion({
   onSpeak,
   onOpenSettings,
   onSubmit,
+  onDraftChange,
 }: ListeningQuestionProps) {
   const [response, setResponse] = useState('');
 
@@ -59,7 +61,16 @@ export function ListeningQuestion({
         <input
           id="listening-answer"
           value={response}
-          onChange={(event) => setResponse(event.target.value)}
+          onChange={(event) => {
+            const next = event.target.value;
+            const answer = next.trim();
+            setResponse(next);
+            onDraftChange?.(answer ? {
+              correct: answer.toLowerCase() === word.word.toLowerCase(),
+              response: answer,
+              correctAnswer: word.word,
+            } : null);
+          }}
           autoComplete="off"
           autoCapitalize="none"
           spellCheck={false}

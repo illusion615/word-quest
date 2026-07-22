@@ -8,6 +8,7 @@ import {
   createGameSession,
   getRevealedChainWordIds,
   replaceUnavailableListening,
+  resolveTimeoutSubmission,
   shuffleEntries,
   startChainGroup,
 } from './session';
@@ -38,6 +39,15 @@ describe('game session', () => {
     expect(AUTO_ADVANCE_DELAY_MS).toBe(3000);
   });
 
+  it('submits the current draft when time expires', () => {
+    expect(resolveTimeoutSubmission({
+      correct: false,
+      response: '已选择的释义',
+      correctAnswer: '正确释义',
+    })).toEqual([false, '已选择的释义', '正确释义']);
+    expect(resolveTimeoutSubmission(null)).toEqual([false, '']);
+  });
+
   it('moves from asking to answered to the next question', () => {
     const preview = createGameSession(plan(2), 1000);
     const session = startChainGroup(preview, 1100);
@@ -50,6 +60,15 @@ describe('game session', () => {
 
     expect(answered.phase).toBe('answered');
     expect(answered.correctCount).toBe(1);
+    expect(answered.results).toEqual([{
+      word: TEST_WORDS[0],
+      mode: 'choice',
+      answer: {
+        correct: true,
+        response: '实现；达成',
+        correctAnswer: '实现；达成',
+      },
+    }]);
     expect(next.phase).toBe('asking');
     expect(next.index).toBe(1);
     expect(next.deadline).toBe(2000 + 12_000);

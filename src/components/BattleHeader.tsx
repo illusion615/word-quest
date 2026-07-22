@@ -29,6 +29,11 @@ export function BattleHeader({
 
   return (
     <header className="battle-header" aria-label="战斗信息">
+      <button type="button" className="battle-exit-button" onClick={onExit} aria-label="退出本轮">
+        <ArrowLeft aria-hidden="true" />
+        <span>退出</span>
+      </button>
+
       <div className="battle-header-title">
         <small>第 {levelNumber} 关</small>
         <strong>{title}</strong>
@@ -56,10 +61,6 @@ export function BattleHeader({
         <span>连击{boostCount > 0 ? ` · 加成×${boostCount}` : (selectedSkill ? ` · ${selectedSkill.name}` : '')}</span>
       </div>
 
-      <button type="button" className="battle-exit-button" onClick={onExit} aria-label="退出本轮">
-        <span>退出</span>
-        <ArrowLeft aria-hidden="true" />
-      </button>
     </header>
   );
 }

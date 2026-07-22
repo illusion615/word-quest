@@ -1,17 +1,18 @@
 import { useState } from 'react';
-import type { WordEntry } from '../../domain/models';
+import type { SessionAnswer, WordEntry } from '../../domain/models';
 import { primarySense } from '../../domain/wordText';
 
 interface SentenceQuestionProps {
   word: WordEntry;
   onSubmit: (correct: boolean, response: string, correctAnswer: string) => void;
+  onDraftChange?: (draft: SessionAnswer | null) => void;
 }
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-export function SentenceQuestion({ word, onSubmit }: SentenceQuestionProps) {
+export function SentenceQuestion({ word, onSubmit, onDraftChange }: SentenceQuestionProps) {
   const [response, setResponse] = useState('');
   const sentence = word.example
     ? word.example.replace(
@@ -38,7 +39,16 @@ export function SentenceQuestion({ word, onSubmit }: SentenceQuestionProps) {
         <input
           id="sentence-answer"
           value={response}
-          onChange={(event) => setResponse(event.target.value)}
+          onChange={(event) => {
+            const next = event.target.value;
+            const answer = next.trim();
+            setResponse(next);
+            onDraftChange?.(answer ? {
+              correct: answer.toLowerCase() === word.word.toLowerCase(),
+              response: answer,
+              correctAnswer: word.word,
+            } : null);
+          }}
           autoComplete="off"
           autoCapitalize="none"
           spellCheck={false}
