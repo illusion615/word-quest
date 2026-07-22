@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { WordEntry } from './models';
 import {
   buildMeaningOptions,
+  buildMeaningSelectionFeedback,
   buildWordOptions,
   correctMeaningIds,
   gradeMeaningSelection,
@@ -45,6 +46,17 @@ describe('buildMeaningOptions', () => {
     const options = buildMeaningOptions(target, pool, { random: stableRandom });
     expect(correctMeaningIds(options)).toEqual(['n. 河流']);
   });
+
+  it('adds one distractor per extra-option stack', () => {
+    const target = makeWord('bank', 'n. 银行；vt. 存入银行');
+    const options = buildMeaningOptions(target, pool, {
+      extraOptionCount: 1,
+      random: stableRandom,
+    });
+
+    expect(options).toHaveLength(6);
+    expect(options.filter((option) => !option.correct)).toHaveLength(4);
+  });
 });
 
 describe('gradeMeaningSelection', () => {
@@ -57,6 +69,19 @@ describe('gradeMeaningSelection', () => {
     expect(gradeMeaningSelection(options, correct.slice(0, 1))).toBe(false); // missing one
     expect(gradeMeaningSelection(options, [...correct, 'n. 河流'])).toBe(false); // extra wrong
   });
+
+  it('classifies selected correct, selected wrong, and missed correct options', () => {
+    const wrongOption = options.find((option) => !option.correct)!;
+    const selected = new Set([correct[0], wrongOption.id]);
+    const feedback = buildMeaningSelectionFeedback(options, selected);
+
+    expect(feedback).toEqual(expect.arrayContaining([
+      { text: correct[0], status: 'correct' },
+      { text: wrongOption.text, status: 'incorrect' },
+      { text: correct[1], status: 'missed' },
+    ]));
+    expect(feedback).toHaveLength(3);
+  });
 });
 
 describe('buildWordOptions', () => {
@@ -66,5 +91,38 @@ describe('buildWordOptions', () => {
     expect(options).toHaveLength(4);
     expect(options.filter((option) => option.correct)).toHaveLength(1);
     expect(options.find((option) => option.correct)?.word.id).toBe('river');
+  });
+
+  it('prioritizes same-part-of-speech words with nearby frequency', () => {
+    const target = { ...makeWord('river', 'n. 河流'), frequencyPercentile: 0.5 };
+    const candidates = [
+      target,
+      { ...makeWord('sprint', 'v. 冲刺'), partOfSpeech: 'verb', frequencyPercentile: 0.51 },
+      { ...makeWord('ocean', 'n. 海洋'), frequencyPercentile: 0.9 },
+      { ...makeWord('stream', 'n. 溪流'), frequencyPercentile: 0.52 },
+      { ...makeWord('lake', 'n. 湖泊'), frequencyPercentile: 0.6 },
+    ];
+    const options = buildWordOptions(target, candidates, {
+      optionCount: 3,
+      preferSimilarDistractors: true,
+      random: stableRandom,
+    });
+    const distractorIds = options
+      .filter((option) => !option.correct)
+      .map((option) => option.id);
+
+    expect(distractorIds).toEqual(expect.arrayContaining(['stream', 'lake']));
+    expect(distractorIds).not.toContain('sprint');
+    expect(distractorIds).not.toContain('ocean');
+  });
+
+  it('adds one word choice per extra-option stack', () => {
+    const target = makeWord('river', 'n. 河流');
+    const options = buildWordOptions(target, pool, {
+      extraOptionCount: 1,
+      random: stableRandom,
+    });
+
+    expect(options).toHaveLength(5);
   });
 });

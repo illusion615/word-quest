@@ -9,8 +9,6 @@ interface BattleSceneProps {
   levelNumber: number;
   enemyKind: CombatEnemyKind;
   headerTitle: string;
-  currentQuestion: number;
-  totalQuestions: number;
   onExit: () => void;
   /** Reading passage rendered above the monsters. Omit to hide it (e.g. no AI). */
   passage?: ReactNode;
@@ -20,6 +18,7 @@ interface BattleSceneProps {
   onSpeak?: (text: string) => void;
   hideWord?: boolean;
   boostCount?: number;
+  rosterFocusWordId?: string;
 }
 
 export function BattleScene({
@@ -27,8 +26,6 @@ export function BattleScene({
   levelNumber,
   enemyKind,
   headerTitle,
-  currentQuestion,
-  totalQuestions,
   onExit,
   passage,
   children,
@@ -37,6 +34,7 @@ export function BattleScene({
   onSpeak,
   hideWord = false,
   boostCount = 0,
+  rosterFocusWordId,
 }: BattleSceneProps) {
   return (
     <section className={`battle-scene is-${enemyKind} ${preview ? 'is-preview' : 'is-asking'}`}>
@@ -48,13 +46,11 @@ export function BattleScene({
         state={state}
         levelNumber={levelNumber}
         title={headerTitle}
-        currentQuestion={currentQuestion}
-        totalQuestions={totalQuestions}
         onExit={onExit}
         boostCount={boostCount}
       />
       {passage && <div className="battle-passage-strip">{passage}</div>}
-      <CombatHud state={state} levelNumber={levelNumber} enemyKind={enemyKind} roster={roster} onSpeak={onSpeak} hideWord={hideWord} />
+      <CombatHud state={state} levelNumber={levelNumber} enemyKind={enemyKind} roster={roster} onSpeak={onSpeak} hideWord={hideWord} focusWordId={rosterFocusWordId} />
       <div className="battle-action-panel">{children}</div>
     </section>
   );

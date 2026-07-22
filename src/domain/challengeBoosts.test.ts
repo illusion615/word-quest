@@ -21,6 +21,10 @@ describe('challengeBoosts', () => {
       timeScale: 1,
       hideMonsterWord: false,
       hideAnswerCount: false,
+      hidePassageDuringQuestions: false,
+      preferSimilarDistractors: false,
+      extraOptionCount: 0,
+      shieldPenalty: 0,
     });
     expect(boostCount({})).toBe(0);
   });
@@ -40,6 +44,23 @@ describe('challengeBoosts', () => {
     expect(boostCount(active)).toBe(4);
   });
 
+  it('combines the new recall, distractor, option, and shield effects', () => {
+    const active: ActiveBoosts = {
+      hiddenPassage: 1,
+      similarDistractors: 1,
+      extraOptions: 2,
+      thinShield: 2,
+    };
+
+    expect(boostEffects(active)).toMatchObject({
+      hidePassageDuringQuestions: true,
+      preferSimilarDistractors: true,
+      extraOptionCount: 2,
+      shieldPenalty: 2,
+    });
+    expect(boostCount(active)).toBe(6);
+  });
+
   it('caps stackable boosts at their maximum', () => {
     let active: ActiveBoosts = {};
     for (let i = 0; i < 10; i += 1) active = applyBoost(active, 'haste');
@@ -48,13 +69,28 @@ describe('challengeBoosts', () => {
   });
 
   it('only offers boosts that still have room', () => {
-    const active = applyBoost(applyBoost({}, 'silentWord'), 'hiddenCount');
+    const active: ActiveBoosts = {
+      silentWord: 1,
+      hiddenCount: 1,
+      hiddenPassage: 1,
+      similarDistractors: 1,
+      extraOptions: 2,
+      thinShield: 2,
+    };
     const offers = drawBoostOffers(active, 3, seeded([0]));
     expect(offers.map((o) => o.id)).toEqual(['haste']);
   });
 
   it('returns an empty offer list when every boost is maxed', () => {
-    const active: ActiveBoosts = { haste: 5, silentWord: 1, hiddenCount: 1 };
+    const active: ActiveBoosts = {
+      haste: 5,
+      silentWord: 1,
+      hiddenCount: 1,
+      hiddenPassage: 1,
+      similarDistractors: 1,
+      extraOptions: 2,
+      thinShield: 2,
+    };
     expect(drawBoostOffers(active, 3, seeded([0]))).toEqual([]);
   });
 
@@ -71,8 +107,21 @@ describe('challengeBoosts', () => {
   });
 
   it('sanitizes persisted values', () => {
-    expect(sanitizeActiveBoosts({ haste: 9, silentWord: 1, bogus: 3, hiddenCount: 0 }))
-      .toEqual({ haste: 5, silentWord: 1 });
+    expect(sanitizeActiveBoosts({
+      haste: 9,
+      silentWord: 1,
+      hiddenPassage: 4,
+      extraOptions: 9,
+      thinShield: 2,
+      bogus: 3,
+      hiddenCount: 0,
+    })).toEqual({
+      haste: 5,
+      silentWord: 1,
+      hiddenPassage: 1,
+      extraOptions: 2,
+      thinShield: 2,
+    });
     expect(sanitizeActiveBoosts(null)).toEqual({});
     expect(sanitizeActiveBoosts('nope')).toEqual({});
   });

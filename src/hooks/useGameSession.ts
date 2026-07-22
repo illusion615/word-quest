@@ -4,6 +4,7 @@ import type {
   AnswerRecord,
   GameMode,
   GameSessionState,
+  SessionAnswer,
   WordEntry,
 } from '../domain/models';
 import {
@@ -14,6 +15,7 @@ import {
   completeSessionEarly,
   createGameSession,
   replaceUnavailableListening,
+  shouldPauseAfterAnswer,
   startChainGroup,
   type ResolvedAnswerEvent,
 } from '../domain/session';
@@ -87,6 +89,7 @@ export function useGameSession(
     correct: boolean,
     response: string,
     correctAnswer?: string,
+    choiceFeedback?: SessionAnswer['choiceFeedback'],
   ) => {
     if (!session || session.phase !== 'asking') return;
     const questionKey = `${session.startedAt}:${session.index}:${session.questionStartedAt}`;
@@ -120,9 +123,10 @@ export function useGameSession(
       correct,
       response,
       correctAnswer: correctAnswer ?? correctAnswerFor(mode, word),
+      ...(choiceFeedback ? { choiceFeedback } : {}),
     }));
     setAutoAdvanceRemainingMs(AUTO_ADVANCE_DELAY_MS);
-    setAutoAdvancePaused(false);
+    setAutoAdvancePaused(shouldPauseAfterAnswer(correct));
   }, [applyRuntimeOverrides, onAnswerResolved, onRecord, session]);
 
   const nextQuestion = useCallback(() => {

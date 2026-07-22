@@ -7,6 +7,10 @@ const maxedBoosts: ActiveBoosts = {
   haste: 5,
   silentWord: 1,
   hiddenCount: 1,
+  hiddenPassage: 1,
+  similarDistractors: 1,
+  extraOptions: 2,
+  thinShield: 2,
 };
 
 function renderPrep(activeBoosts: ActiveBoosts, offers = BOOST_DEFS.slice(0, 3)): string {

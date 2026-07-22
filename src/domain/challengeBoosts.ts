@@ -3,7 +3,14 @@
 // accumulate across levels. Answering wrong drops a random boost, so the run
 // self-balances toward the player's real ceiling.
 
-export type BoostId = 'haste' | 'silentWord' | 'hiddenCount';
+export type BoostId =
+  | 'haste'
+  | 'silentWord'
+  | 'hiddenCount'
+  | 'hiddenPassage'
+  | 'similarDistractors'
+  | 'extraOptions'
+  | 'thinShield';
 
 export interface BoostDef {
   id: BoostId;
@@ -36,6 +43,34 @@ export const BOOST_DEFS: readonly BoostDef[] = [
     stackable: false,
     maxStacks: 1,
   },
+  {
+    id: 'hiddenPassage',
+    name: '断章',
+    description: '记忆串预览结束后，答题时不再显示原文。',
+    stackable: false,
+    maxStacks: 1,
+  },
+  {
+    id: 'similarDistractors',
+    name: '拟态',
+    description: '干扰项优先使用相同词性、相近词频的单词。',
+    stackable: false,
+    maxStacks: 1,
+  },
+  {
+    id: 'extraOptions',
+    name: '人海',
+    description: '选择题额外增加 1 个干扰项。',
+    stackable: true,
+    maxStacks: 2,
+  },
+  {
+    id: 'thinShield',
+    name: '薄甲',
+    description: '卷王护盾上限减少 1 格。',
+    stackable: true,
+    maxStacks: 2,
+  },
 ];
 
 /** How many stacks of each boost are currently active. */
@@ -48,6 +83,14 @@ export interface BoostEffects {
   hideMonsterWord: boolean;
   /** Hide the "共 N 项" hint on meaning-selection questions. */
   hideAnswerCount: boolean;
+  /** Hide the generated reading after its preview phase. */
+  hidePassageDuringQuestions: boolean;
+  /** Prefer distractors with matching part of speech and nearby frequency. */
+  preferSimilarDistractors: boolean;
+  /** Number of distractors added to supported choice questions. */
+  extraOptionCount: number;
+  /** Amount subtracted from the combat shield at battle start. */
+  shieldPenalty: number;
 }
 
 const HASTE_STEP = 0.9;
@@ -75,6 +118,10 @@ export function boostEffects(active: ActiveBoosts): BoostEffects {
     timeScale: Math.max(MIN_TIME_SCALE, HASTE_STEP ** haste),
     hideMonsterWord: boostStacks(active, 'silentWord') > 0,
     hideAnswerCount: boostStacks(active, 'hiddenCount') > 0,
+    hidePassageDuringQuestions: boostStacks(active, 'hiddenPassage') > 0,
+    preferSimilarDistractors: boostStacks(active, 'similarDistractors') > 0,
+    extraOptionCount: boostStacks(active, 'extraOptions'),
+    shieldPenalty: boostStacks(active, 'thinShield'),
   };
 }
 

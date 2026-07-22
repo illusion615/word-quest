@@ -120,6 +120,14 @@ export interface SessionAnswer {
   correct: boolean;
   response: string;
   correctAnswer: string;
+  choiceFeedback?: AnswerChoiceFeedback[];
+}
+
+export type AnswerChoiceStatus = 'correct' | 'incorrect' | 'missed';
+
+export interface AnswerChoiceFeedback {
+  text: string;
+  status: AnswerChoiceStatus;
 }
 
 export interface SessionResult {

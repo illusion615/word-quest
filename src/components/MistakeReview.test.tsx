@@ -7,11 +7,15 @@ import { MistakeReview } from './MistakeReview';
 const results: SessionResult[] = [
   {
     word: TEST_WORDS[0],
-    mode: 'match-word',
+    mode: 'match-meaning',
     answer: {
       correct: false,
       response: 'benefit',
       correctAnswer: 'achieve',
+      choiceFeedback: [
+        { text: '实现；达成', status: 'missed' },
+        { text: '益处；好处', status: 'incorrect' },
+      ],
     },
   },
   {
@@ -42,10 +46,11 @@ describe('MistakeReview', () => {
     expect(html).toContain('2 题');
     expect(html).toContain('实现；达成');
     expect(html).toContain('你的答案');
-    expect(html).toContain('benefit');
+    expect(html).toContain('选错');
+    expect(html).toContain('漏选');
     expect(html).toContain('本题标准答案：achieve');
     expect(html).toContain('未作答');
-    expect(html).not.toContain('益处；好处');
+    expect(html).not.toContain('<strong>benefit</strong>');
   });
 
   it('renders nothing for a perfect round', () => {

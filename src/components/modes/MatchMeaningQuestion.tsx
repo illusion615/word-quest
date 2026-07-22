@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Volume2 } from '../../icons';
-import type { SessionAnswer, WordEntry } from '../../domain/models';
+import type { SessionAnswer, WordEntry, WordProgress } from '../../domain/models';
 import type { MeaningOption } from '../../domain/challenge';
 import {
   buildMeaningOptions,
+  buildMeaningSelectionFeedback,
   correctMeaningIds,
   gradeMeaningSelection,
 } from '../../domain/challenge';
+import { ChoiceReviewMark, resolveChoiceReviewState } from './ChoiceReviewMark';
 
 interface MatchMeaningQuestionProps {
   word: WordEntry;
@@ -14,9 +16,18 @@ interface MatchMeaningQuestionProps {
   isSpeechSupported: boolean;
   isSpeaking: boolean;
   onSpeak: (text: string) => void;
-  onSubmit: (correct: boolean, response: string, correctAnswer: string) => void;
+  onSubmit: (
+    correct: boolean,
+    response: string,
+    correctAnswer: string,
+    choiceFeedback?: SessionAnswer['choiceFeedback'],
+  ) => void;
   onDraftChange?: (draft: SessionAnswer | null) => void;
   hideAnswerCount?: boolean;
+  extraOptionCount?: number;
+  preferSimilarDistractors?: boolean;
+  reviewed?: boolean;
+  wordProgress?: WordProgress;
 }
 
 /**
@@ -32,8 +43,15 @@ export function MatchMeaningQuestion({
   onSubmit,
   onDraftChange,
   hideAnswerCount = false,
+  extraOptionCount = 0,
+  preferSimilarDistractors = false,
+  reviewed = false,
+  wordProgress,
 }: MatchMeaningQuestionProps) {
-  const options = useMemo(() => buildMeaningOptions(word, entries), [word, entries]);
+  const options = useMemo(() => buildMeaningOptions(word, entries, {
+    extraOptionCount,
+    preferSimilarDistractors,
+  }), [entries, extraOptionCount, preferSimilarDistractors, word]);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
 
   useEffect(() => {
@@ -52,10 +70,16 @@ export function MatchMeaningQuestion({
       .filter((option: MeaningOption) => option.correct)
       .map((option: MeaningOption) => option.text)
       .join('、');
-    return { correct, response: chosen, correctAnswer: answer };
+    return {
+      correct,
+      response: chosen,
+      correctAnswer: answer,
+      choiceFeedback: buildMeaningSelectionFeedback(options, selection),
+    };
   }
 
   function toggle(id: string) {
+    if (reviewed) return;
     const next = new Set(selected);
     if (next.has(id)) next.delete(id);
     else next.add(id);
@@ -65,51 +89,85 @@ export function MatchMeaningQuestion({
 
   function handleSubmit() {
     const submission = submissionFor(selected);
-    onSubmit(submission.correct, submission.response, submission.correctAnswer);
+    onSubmit(
+      submission.correct,
+      submission.response,
+      submission.correctAnswer,
+      submission.choiceFeedback,
+    );
   }
 
   const correctCount = correctMeaningIds(options).length;
 
   return (
     <div className="question-layout">
-      <button
-        type="button"
-        className="sound-button"
-        onClick={() => onSpeak(word.word)}
-        disabled={!isSpeechSupported || isSpeaking}
-        aria-label="播放单词发音"
-      >
-        <Volume2 aria-hidden="true" />
-      </button>
-      <div className="word-prompt">
-        <strong>{word.word}</strong>
-        <span>{word.phonetic} · {word.partOfSpeech}</span>
+      <div className="word-prompt-row">
+        <div className="word-prompt">
+          <strong>{word.word}</strong>
+          <span className="word-phonetic">
+            <button
+              type="button"
+              className="word-audio"
+              onClick={() => onSpeak(word.word)}
+              disabled={!isSpeechSupported || isSpeaking}
+              aria-label="播放单词发音"
+            >
+              <Volume2 aria-hidden="true" />
+            </button>
+            {word.phonetic}{word.partOfSpeech ? ` · ${word.partOfSpeech}` : ''}
+          </span>
+        </div>
+        {wordProgress && (
+          <dl className="answer-stats-inline" aria-label="本词学习进度">
+            <div><dt>练习</dt><dd>{wordProgress.attempts}</dd></div>
+            <div><dt>答对</dt><dd>{wordProgress.correct}</dd></div>
+            <div><dt>正确率</dt><dd>{wordProgress.mastery}%</dd></div>
+          </dl>
+        )}
       </div>
       <p className="question-kicker">
         {hideAnswerCount ? '选出全部正确释义' : `选出全部正确释义（共 ${correctCount} 项）`}
       </p>
-      <div className="choice-grid" role="group" aria-label="选择正确释义">
-        {options.map((option, index) => (
-          <button
-            key={option.id}
-            type="button"
-            className={`choice-button ${selected.has(option.id) ? 'is-selected' : ''}`}
-            aria-pressed={selected.has(option.id)}
-            onClick={() => toggle(option.id)}
-          >
-            <span>{String.fromCharCode(65 + index)}</span>
-            {option.text}
-          </button>
-        ))}
-      </div>
-      <button
-        className="primary-button"
-        type="button"
-        onClick={handleSubmit}
-        disabled={selected.size === 0}
+      <div
+        className="choice-grid"
+        role="group"
+        aria-label="选择正确释义"
+        data-option-count={options.length}
       >
-        提交答案
-      </button>
+        {options.map((option, index) => {
+          const selectedOption = selected.has(option.id);
+          const reviewState = resolveChoiceReviewState(option.correct, selectedOption, reviewed);
+          return (
+            <button
+              key={option.id}
+              type="button"
+              className={[
+                'choice-button',
+                selectedOption ? 'is-selected' : '',
+                reviewState ? `is-${reviewState}` : '',
+              ].filter(Boolean).join(' ')}
+              aria-pressed={selectedOption}
+              data-review-state={reviewState ?? undefined}
+              onClick={() => toggle(option.id)}
+              disabled={reviewed}
+            >
+              <span className="choice-letter">{String.fromCharCode(65 + index)}</span>
+              <span className="choice-text">{option.text}</span>
+              <ChoiceReviewMark state={reviewState} />
+            </button>
+          );
+        })}
+      </div>
+      {!reviewed && (
+        <button
+          className="primary-button"
+          type="button"
+          onClick={handleSubmit}
+          disabled={selected.size === 0}
+        >
+          提交答案
+        </button>
+      )}
     </div>
   );
 }

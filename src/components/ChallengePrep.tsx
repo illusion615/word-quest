@@ -1,4 +1,15 @@
-import { ArrowRight, Crown, EyeOff, Hash, Zap } from '../icons';
+import {
+  ArrowLeft,
+  ArrowRight,
+  BookOpenCheck,
+  Crown,
+  EyeOff,
+  Hash,
+  Layers3,
+  ListChecks,
+  Shield,
+  Zap,
+} from '../icons';
 import {
   BOOST_DEFS,
   boostStacks,
@@ -21,6 +32,10 @@ const BOOST_ICONS: Record<BoostId, typeof Zap> = {
   haste: Zap,
   silentWord: EyeOff,
   hiddenCount: Hash,
+  hiddenPassage: BookOpenCheck,
+  similarDistractors: Layers3,
+  extraOptions: ListChecks,
+  thinShield: Shield,
 };
 
 export function ChallengePrep({
@@ -36,7 +51,10 @@ export function ChallengePrep({
 
   return (
     <main className="skill-draft-page page-width">
-      <button type="button" className="icon-text-button" onClick={onExit}>退出挑战</button>
+      <button type="button" className="icon-text-button" onClick={onExit} aria-label="退出挑战">
+        <ArrowLeft aria-hidden="true" />
+        <span>退出</span>
+      </button>
       <section className="skill-draft-panel" aria-labelledby="challenge-prep-heading">
         <p className="eyebrow">第 {levelNumber} 关 · 战前整备</p>
         <h1 id="challenge-prep-heading">不够卷，再强一点</h1>

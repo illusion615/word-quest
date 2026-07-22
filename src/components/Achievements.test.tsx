@@ -7,7 +7,8 @@ import {
   type AchievementSnapshot,
 } from '../domain/achievements';
 import { createEmptyGameProgress } from '../domain/gameProgress';
-import type { LearningStats } from '../domain/progress';
+import { createEmptyLearningState, type LearningStats } from '../domain/progress';
+import { buildGrindMetrics } from '../domain/grindMetrics';
 import { AchievementDialog } from './AchievementDialog';
 import { AchievementToast } from './AchievementToast';
 
@@ -23,7 +24,15 @@ const learningStats: LearningStats = {
 const snapshot: AchievementSnapshot = {
   gameProgress: createEmptyGameProgress(),
   learningStats,
-  activeBoosts: { haste: 5, silentWord: 1, hiddenCount: 1 },
+  activeBoosts: {
+    haste: 5,
+    silentWord: 1,
+    hiddenCount: 1,
+    hiddenPassage: 1,
+    similarDistractors: 1,
+    extraOptions: 2,
+    thinShield: 2,
+  },
 };
 
 describe('achievement UI', () => {
@@ -39,6 +48,8 @@ describe('achievement UI', () => {
         open
         state={state}
         snapshot={snapshot}
+        stats={learningStats}
+        grind={buildGrindMetrics(createEmptyLearningState())}
         onClose={() => undefined}
       />,
     );
@@ -56,6 +67,8 @@ describe('achievement UI', () => {
         open={false}
         state={createEmptyAchievementState()}
         snapshot={snapshot}
+        stats={learningStats}
+        grind={buildGrindMetrics(createEmptyLearningState())}
         onClose={() => undefined}
       />,
     )).toBe('');

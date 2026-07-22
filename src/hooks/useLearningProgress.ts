@@ -9,6 +9,7 @@ import {
   parseLearningState,
   recordAnswer,
 } from '../domain/progress';
+import { buildGrindMetrics } from '../domain/grindMetrics';
 
 const INDEXED_DB_KEY = 'wordbuddy.learning.state.v1';
 
@@ -81,6 +82,7 @@ export function useLearningProgress() {
     learningState,
     hydrated,
     stats: getLearningStats(learningState),
+    grind: buildGrindMetrics(learningState),
     addAnswer,
     getQueue,
     resetProgress,

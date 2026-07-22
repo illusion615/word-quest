@@ -5,26 +5,17 @@ interface BattleHeaderProps {
   state: CombatState;
   levelNumber: number;
   title: string;
-  currentQuestion: number;
-  totalQuestions: number;
   onExit: () => void;
   boostCount?: number;
-}
-
-function percentage(value: number, maximum: number): number {
-  return maximum > 0 ? Math.round((value / maximum) * 100) : 0;
 }
 
 export function BattleHeader({
   state,
   levelNumber,
   title,
-  currentQuestion,
-  totalQuestions,
   onExit,
   boostCount = 0,
 }: BattleHeaderProps) {
-  const questionPercentage = percentage(currentQuestion, totalQuestions);
   const selectedSkill = COMBAT_SKILLS.find((skill) => skill.id === state.skillId);
 
   return (
@@ -37,13 +28,6 @@ export function BattleHeader({
       <div className="battle-header-title">
         <small>第 {levelNumber} 关</small>
         <strong>{title}</strong>
-      </div>
-
-      <div className="battle-question-progress">
-        <div><span>题目进度</span><strong>{currentQuestion} / {totalQuestions}</strong></div>
-        <div className="battle-header-track" aria-hidden="true">
-          <span style={{ width: `${questionPercentage}%` }} />
-        </div>
       </div>
 
       <div className="player-status">

@@ -29,6 +29,13 @@ describe('combat engine', () => {
     expect(state.playerShield).toBe(3);
   });
 
+  it('starts with a reduced custom shield budget', () => {
+    const state = createCombatState(10, { playerShield: 1 });
+
+    expect(state.playerShield).toBe(1);
+    expect(state.maxPlayerShield).toBe(1);
+  });
+
   it('fells one monster per correct answer, builds combo, and records a fast critical hit', () => {
     const first = combatReducer(started(), {
       type: 'answer',

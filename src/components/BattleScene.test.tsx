@@ -11,8 +11,6 @@ describe('BattleScene', () => {
         levelNumber={3}
         enemyKind="grunt"
         headerTitle="释义选择 · 建立识别"
-        currentQuestion={2}
-        totalQuestions={5}
         onExit={() => undefined}
         passage={<p>语境面板</p>}
       >
@@ -25,7 +23,6 @@ describe('BattleScene', () => {
     expect(html).toContain('语境面板');
     expect(html).toContain('battle-action-panel');
     expect(html).toContain('释义选择 · 建立识别');
-    expect(html).toContain('2 / 5');
     expect(html).toContain('作答面板');
   });
 
@@ -36,8 +33,6 @@ describe('BattleScene', () => {
         levelNumber={3}
         enemyKind="grunt"
         headerTitle="记忆串联"
-        currentQuestion={1}
-        totalQuestions={5}
         onExit={() => undefined}
         preview
       >
@@ -57,8 +52,6 @@ describe('BattleScene', () => {
         levelNumber={3}
         enemyKind="grunt"
         headerTitle="释义选择"
-        currentQuestion={1}
-        totalQuestions={5}
         onExit={() => undefined}
         passage={<p>阅读正文</p>}
       >

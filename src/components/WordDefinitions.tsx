@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { BookOpenCheck } from '../icons';
 import type {
   DefinitionLanguage,
   WordEntry,
@@ -16,6 +18,8 @@ interface SenseListProps {
   language?: DefinitionLanguage;
   examples?: WordSenseExample[];
   exampleStatus?: 'loading' | 'success' | 'error' | 'unavailable';
+  collapsibleExamples?: boolean;
+  onExampleExpand?: () => void;
 }
 
 function exampleStatusLabel(status: SenseListProps['exampleStatus']): string {
@@ -30,20 +34,54 @@ export function SenseList({
   language = 'zh',
   examples = [],
   exampleStatus,
+  collapsibleExamples = false,
+  onExampleExpand,
 }: SenseListProps) {
+  const [expandedExamples, setExpandedExamples] = useState<Set<string>>(() => new Set());
+
+  function toggleExample(key: string) {
+    if (!expandedExamples.has(key)) onExampleExpand?.();
+    setExpandedExamples((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
   return (
     <ol className="definition-senses">
       {senses.map((sense, index) => {
+        const exampleKey = `${language}-${index}`;
         const example = examples.find((candidate) => (
           candidate.language === language && candidate.senseIndex === index
         ));
+        const expanded = expandedExamples.has(exampleKey);
         return (
           <li key={`${sense.label}-${sense.text}-${index}`}>
             <div>
               {sense.label && <span className="sense-label">{sense.label}</span>}
               <span>{sense.text}</span>
             </div>
-            {example ? (
+            {example && collapsibleExamples ? (
+              <div className="sense-example-disclosure">
+                <button
+                  type="button"
+                  className="sense-example-toggle"
+                  aria-expanded={expanded}
+                  onClick={() => toggleExample(exampleKey)}
+                >
+                  <BookOpenCheck aria-hidden="true" />
+                  {expanded ? '收起例句' : '查看该义项例句'}
+                </button>
+                {expanded && (
+                  <blockquote className="sense-example">
+                    <p lang="en">{example.sentence}</p>
+                    <footer>{example.translation}</footer>
+                  </blockquote>
+                )}
+              </div>
+            ) : example ? (
               <blockquote className="sense-example">
                 <p lang="en">{example.sentence}</p>
                 <footer>{example.translation}</footer>

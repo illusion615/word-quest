@@ -1,19 +1,11 @@
-import {
-  BookOpenCheck,
-  CalendarCheck,
-  Clock3,
-  RefreshCw,
-  Target,
-} from '../icons';
+import { RefreshCw } from '../icons';
 import type { BankCoverageMap } from '../domain/coverage';
 import type { BankId, WordBankManifest } from '../domain/models';
-import type { LearningStats } from '../domain/progress';
 import { CoverageRings } from './CoverageRings';
 
 interface BattleRecordProps {
   banks: WordBankManifest[];
   selectedBank: BankId;
-  stats: LearningStats;
   coverage: BankCoverageMap | null;
   coverageLoading: boolean;
   coverageError: string | null;
@@ -25,7 +17,6 @@ interface BattleRecordProps {
 export function BattleRecord({
   banks,
   selectedBank,
-  stats,
   coverage,
   coverageLoading,
   coverageError,
@@ -43,7 +34,7 @@ export function BattleRecord({
       <div className="battle-record-main">
         <div className="battle-record-heading">
           <div>
-            <p className="section-index">战绩总览</p>
+            <p className="section-index">词库战绩</p>
             <h1 id="battle-record-heading">{currentBank.name}</h1>
             <span>{currentBank.count.toLocaleString()} 只词怪</span>
           </div>
@@ -68,13 +59,6 @@ export function BattleRecord({
             <small>{currentCoverage?.mastered ?? 0} / {currentBank.count.toLocaleString()} 个词</small>
           </div>
         </div>
-      </div>
-
-      <div className="battle-kpis" aria-label="全局学习战绩">
-        <div><BookOpenCheck aria-hidden="true" /><strong>{stats.learned}</strong><span>已学习</span></div>
-        <div><Target aria-hidden="true" /><strong>{stats.accuracy}%</strong><span>正确率</span></div>
-        <div><Clock3 aria-hidden="true" /><strong>{stats.due}</strong><span>待复习</span></div>
-        <div><CalendarCheck aria-hidden="true" /><strong>{stats.streak}</strong><span>连续天数</span></div>
       </div>
 
       <div className="bank-switcher" role="group" aria-label="切换词库关卡">

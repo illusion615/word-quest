@@ -19,9 +19,10 @@ interface CombatHudProps {
   roster?: WaveMonster[];
   onSpeak?: (text: string) => void;
   hideWord?: boolean;
+  focusWordId?: string;
 }
 
-export function CombatHud({ state, levelNumber, enemyKind = 'grunt', roster, onSpeak, hideWord = false }: CombatHudProps) {
+export function CombatHud({ state, levelNumber, enemyKind = 'grunt', roster, onSpeak, hideWord = false, focusWordId }: CombatHudProps) {
   const event = state.lastEvent;
   const pose = useMonsterPresentation(state);
   const monster = resolveMonsterArtwork(state, enemyKind, pose);
@@ -44,7 +45,7 @@ export function CombatHud({ state, levelNumber, enemyKind = 'grunt', roster, onS
     >
       <div className="combat-stage">
         {roster && roster.length > 0 ? (
-          <MonsterRoster monsters={roster} activePose={pose} event={event} onSpeak={onSpeak} hideWord={hideWord} />
+          <MonsterRoster monsters={roster} activePose={pose} event={event} onSpeak={onSpeak} hideWord={hideWord} focusWordId={focusWordId} />
         ) : (
           <>
             <img

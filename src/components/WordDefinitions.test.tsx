@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { WordEntry } from '../domain/models';
-import { WordDefinitions } from './WordDefinitions';
+import { SenseList, WordDefinitions } from './WordDefinitions';
 
 const word: WordEntry = {
   id: 'still',
@@ -59,5 +59,25 @@ describe('WordDefinitions', () => {
       <WordDefinitions word={word} exampleStatus="unavailable" />,
     );
     expect(html).toContain('连接 AI 后生成此义项的用法例句。');
+  });
+
+  it('can render sense examples as collapsed disclosures', () => {
+    const html = renderToStaticMarkup(
+      <SenseList
+        senses={[{ label: 'n.', text: '寂静' }]}
+        examples={[{
+          language: 'zh',
+          senseIndex: 0,
+          sentence: 'The room was completely still.',
+          translation: '房间里一片寂静。',
+        }]}
+        exampleStatus="success"
+        collapsibleExamples
+      />,
+    );
+
+    expect(html).toContain('查看该义项例句');
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).not.toContain('The room was completely still.');
   });
 });

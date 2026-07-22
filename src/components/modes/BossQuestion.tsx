@@ -7,13 +7,20 @@ interface BossQuestionProps {
   word: WordEntry;
   onSubmit: (correct: boolean, response: string, correctAnswer: string) => void;
   onDraftChange?: (draft: SessionAnswer | null) => void;
+  reviewAnswer?: SessionAnswer | null;
 }
 
-export function BossQuestion({ word, onSubmit, onDraftChange }: BossQuestionProps) {
+export function BossQuestion({
+  word,
+  onSubmit,
+  onDraftChange,
+  reviewAnswer = null,
+}: BossQuestionProps) {
   const [response, setResponse] = useState('');
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (reviewAnswer) return;
     const answer = response.trim();
     if (!answer) return;
     onSubmit(answer.toLowerCase() === word.word.toLowerCase(), answer, word.word);
@@ -30,6 +37,8 @@ export function BossQuestion({ word, onSubmit, onDraftChange }: BossQuestionProp
         <input
           id="boss-answer"
           value={response}
+          className={reviewAnswer ? (reviewAnswer.correct ? 'is-reviewed-correct' : 'is-reviewed-wrong') : ''}
+          disabled={Boolean(reviewAnswer)}
           onChange={(event) => {
             const next = event.target.value;
             const answer = next.trim();
@@ -43,11 +52,18 @@ export function BossQuestion({ word, onSubmit, onDraftChange }: BossQuestionProp
           autoComplete="off"
           autoCapitalize="none"
           spellCheck={false}
-          autoFocus
+          autoFocus={!reviewAnswer}
         />
-        <button className="primary-button" type="submit" disabled={!response.trim()}>
-          发起攻击
-        </button>
+        {reviewAnswer ? (
+          <div className={`written-answer-review ${reviewAnswer.correct ? 'is-correct' : 'is-wrong'}`}>
+            <span>你的答案：{reviewAnswer.response || '未作答'}</span>
+            {!reviewAnswer.correct && <strong>正确答案：{reviewAnswer.correctAnswer}</strong>}
+          </div>
+        ) : (
+          <button className="primary-button" type="submit" disabled={!response.trim()}>
+            发起攻击
+          </button>
+        )}
       </form>
     </div>
   );

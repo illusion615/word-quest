@@ -40,7 +40,15 @@ describe('achievements', () => {
 
   it('unlocks the word king when every boost is maxed', () => {
     const current = snapshot({
-      activeBoosts: { haste: 5, silentWord: 1, hiddenCount: 1 },
+      activeBoosts: {
+        haste: 5,
+        silentWord: 1,
+        hiddenCount: 1,
+        hiddenPassage: 1,
+        similarDistractors: 1,
+        extraOptions: 2,
+        thinShield: 2,
+      },
     });
     const unlocked = newlyUnlockedAchievements(current, createEmptyAchievementState());
 
@@ -80,7 +88,17 @@ describe('achievements', () => {
   });
 
   it('does not unlock the same achievement twice', () => {
-    const current = snapshot({ activeBoosts: { haste: 5, silentWord: 1, hiddenCount: 1 } });
+    const current = snapshot({
+      activeBoosts: {
+        haste: 5,
+        silentWord: 1,
+        hiddenCount: 1,
+        hiddenPassage: 1,
+        similarDistractors: 1,
+        extraOptions: 2,
+        thinShield: 2,
+      },
+    });
     const definition = ACHIEVEMENTS.find((achievement) => achievement.id === 'word-king')!;
     const state = unlockAchievements(
       createEmptyAchievementState(),

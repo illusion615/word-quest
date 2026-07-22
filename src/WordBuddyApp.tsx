@@ -44,6 +44,7 @@ import {
   type BoostDef,
   type BoostId,
 } from './domain/challengeBoosts';
+import { DEFAULT_PLAYER_SHIELD } from './domain/combat';
 import { useAiConnection } from './hooks/useAiConnection';
 import { useAchievements } from './hooks/useAchievements';
 import { useBankCoverage } from './hooks/useBankCoverage';
@@ -131,6 +132,7 @@ export default function WordBuddyApp() {
   const {
     learningState,
     stats,
+    grind,
     addAnswer,
     hydrated: progressHydrated,
   } = useLearningProgress();
@@ -366,7 +368,11 @@ export default function WordBuddyApp() {
       setPendingBoostPenalty(false);
       setBoostOffers(drawBoostOffers(boosts, 3));
       gameProgress.beginBattle();
-      combat.prepareCombat(plan.length);
+      const playerShield = Math.max(
+        1,
+        DEFAULT_PLAYER_SHIELD - boostEffects(boosts).shieldPenalty,
+      );
+      combat.prepareCombat(plan.length, playerShield);
       startSession(plan);
     }
   }
@@ -390,6 +396,11 @@ export default function WordBuddyApp() {
     setActiveBoosts(next);
     persistBoosts(next);
     setDroppedBoostName(null);
+    const playerShield = Math.max(
+      1,
+      DEFAULT_PLAYER_SHIELD - boostEffects(next).shieldPenalty,
+    );
+    combat.prepareCombat(session?.queue.length ?? combat.state.maxEnemyHealth, playerShield);
     // Combat scoring keeps a neutral default tactic; difficulty now comes from boosts.
     combat.chooseSkill('steady');
   }
@@ -441,8 +452,8 @@ export default function WordBuddyApp() {
     }
   }
 
-  function handleAiRequest(word: WordEntry) {
-    pauseAutoAdvance();
+  function handleAiRequest(word: WordEntry, pauseReview = true) {
+    if (pauseReview) pauseAutoAdvance();
     if (!aiConfigured) {
       setPendingAiWord(word);
       setSettingsOpen(true);
@@ -495,7 +506,6 @@ export default function WordBuddyApp() {
           <BattleRecord
             banks={WORD_BANKS}
             selectedBank={selectedBank}
-            stats={stats}
             coverage={coverage}
             coverageLoading={coverageLoading}
             coverageError={coverageError}
@@ -605,6 +615,9 @@ export default function WordBuddyApp() {
           wordProgress={currentWordProgress}
           hideMonsterWord={boostFx.hideMonsterWord}
           hideAnswerCount={boostFx.hideAnswerCount}
+          hidePassageDuringQuestions={boostFx.hidePassageDuringQuestions}
+          preferSimilarDistractors={boostFx.preferSimilarDistractors}
+          extraOptionCount={boostFx.extraOptionCount}
           boostCount={boostCount(activeBoosts)}
           timeScale={boostFx.timeScale}
           speechSupported={speech.isPlaybackAvailable}
@@ -660,6 +673,8 @@ export default function WordBuddyApp() {
         open={achievementsOpen}
         state={achievements.state}
         snapshot={achievementSnapshot}
+        stats={stats}
+        grind={grind}
         onClose={() => setAchievementsOpen(false)}
       />
       <AchievementToast

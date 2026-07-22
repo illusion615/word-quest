@@ -27,10 +27,14 @@ export const AUTO_ADVANCE_DELAY_MS = 3_000;
 
 export function resolveTimeoutSubmission(
   draft: SessionAnswer | null,
-): readonly [boolean, string, string?] {
+): readonly [boolean, string, string?, SessionAnswer['choiceFeedback']?] {
   return draft
-    ? [draft.correct, draft.response, draft.correctAnswer]
+    ? [draft.correct, draft.response, draft.correctAnswer, draft.choiceFeedback]
     : [false, ''];
+}
+
+export function shouldPauseAfterAnswer(correct: boolean): boolean {
+  return !correct;
 }
 
 export function createGameSession(

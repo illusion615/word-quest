@@ -211,6 +211,8 @@ function localDateKey(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
+export { localDateKey };
+
 function dayBefore(date: Date): Date {
   const previous = new Date(date);
   previous.setDate(previous.getDate() - 1);

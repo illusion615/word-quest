@@ -1,4 +1,5 @@
 import type { GameMode, SessionResult } from '../domain/models';
+import { AnswerChoiceFeedback } from './AnswerChoiceFeedback';
 
 interface MistakeReviewProps {
   results: SessionResult[];
@@ -54,7 +55,11 @@ export function MistakeReview({ results }: MistakeReviewProps) {
                 </div>
                 <div className="is-player">
                   <span>你的答案</span>
-                  <p>{response}</p>
+                  {result.answer.choiceFeedback?.length ? (
+                    <AnswerChoiceFeedback choices={result.answer.choiceFeedback} />
+                  ) : (
+                    <p>{response}</p>
+                  )}
                 </div>
               </div>
             </article>
