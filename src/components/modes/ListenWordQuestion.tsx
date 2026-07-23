@@ -37,7 +37,7 @@ export function ListenWordQuestion({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const options = useMemo(() => buildWordOptions(word, entries, {
     extraOptionCount,
-    preferSimilarDistractors,
+    preferSimilarPronunciations: preferSimilarDistractors,
   }), [entries, extraOptionCount, preferSimilarDistractors, word]);
 
   useEffect(() => {

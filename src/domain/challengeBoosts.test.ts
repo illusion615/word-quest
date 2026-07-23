@@ -19,12 +19,11 @@ describe('challengeBoosts', () => {
   it('starts with a neutral effect profile', () => {
     expect(boostEffects({})).toEqual({
       timeScale: 1,
-      hideMonsterWord: false,
+      disableMonsterSpeech: false,
       hideAnswerCount: false,
       hidePassageDuringQuestions: false,
       preferSimilarDistractors: false,
       extraOptionCount: 0,
-      shieldPenalty: 0,
     });
     expect(boostCount({})).toBe(0);
   });
@@ -39,26 +38,24 @@ describe('challengeBoosts', () => {
   it('toggles hide effects and counts total stacks', () => {
     const active = applyBoost(applyBoost({ haste: 2 }, 'silentWord'), 'hiddenCount');
     const effects = boostEffects(active);
-    expect(effects.hideMonsterWord).toBe(true);
+    expect(effects.disableMonsterSpeech).toBe(true);
     expect(effects.hideAnswerCount).toBe(true);
     expect(boostCount(active)).toBe(4);
   });
 
-  it('combines the new recall, distractor, option, and shield effects', () => {
+  it('combines the recall, distractor, and option effects', () => {
     const active: ActiveBoosts = {
       hiddenPassage: 1,
       similarDistractors: 1,
       extraOptions: 2,
-      thinShield: 2,
     };
 
     expect(boostEffects(active)).toMatchObject({
       hidePassageDuringQuestions: true,
       preferSimilarDistractors: true,
       extraOptionCount: 2,
-      shieldPenalty: 2,
     });
-    expect(boostCount(active)).toBe(6);
+    expect(boostCount(active)).toBe(4);
   });
 
   it('caps stackable boosts at their maximum', () => {
@@ -75,7 +72,6 @@ describe('challengeBoosts', () => {
       hiddenPassage: 1,
       similarDistractors: 1,
       extraOptions: 2,
-      thinShield: 2,
     };
     const offers = drawBoostOffers(active, 3, seeded([0]));
     expect(offers.map((o) => o.id)).toEqual(['haste']);
@@ -89,7 +85,6 @@ describe('challengeBoosts', () => {
       hiddenPassage: 1,
       similarDistractors: 1,
       extraOptions: 2,
-      thinShield: 2,
     };
     expect(drawBoostOffers(active, 3, seeded([0]))).toEqual([]);
   });
@@ -120,7 +115,6 @@ describe('challengeBoosts', () => {
       silentWord: 1,
       hiddenPassage: 1,
       extraOptions: 2,
-      thinShield: 2,
     });
     expect(sanitizeActiveBoosts(null)).toEqual({});
     expect(sanitizeActiveBoosts('nope')).toEqual({});

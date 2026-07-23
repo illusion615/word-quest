@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { createCombatState } from '../domain/combat';
+import { createCombatState, type CombatState } from '../domain/combat';
+import { buildBossAssessmentPlan } from '../domain/boss';
 import type { AdaptiveStudyItem, GameSessionState } from '../domain/models';
 import { TEST_WORDS } from '../test/fixtures/words';
 import { PracticeSession } from './PracticeSession';
@@ -24,6 +25,10 @@ function renderPractice({
   currentChainItems = [],
   hidePassageDuringQuestions = false,
   autoAdvancePaused = false,
+  speechSupported = false,
+  enemyKind = 'grunt',
+  combatState = createCombatState(1),
+  levelNewCount = completionAction === 'continue' ? 4 : 0,
 }: {
   completionAction?: 'next' | 'continue' | 'finished';
   session?: GameSessionState;
@@ -31,6 +36,10 @@ function renderPractice({
   currentChainItems?: AdaptiveStudyItem[];
   hidePassageDuringQuestions?: boolean;
   autoAdvancePaused?: boolean;
+  speechSupported?: boolean;
+  enemyKind?: 'grunt' | 'boss';
+  combatState?: CombatState;
+  levelNewCount?: number;
 } = {}): string {
   return renderToStaticMarkup(
     <PracticeSession
@@ -48,11 +57,12 @@ function renderPractice({
       onToggleAutoAdvance={() => undefined}
       onExit={() => undefined}
       levelNumber={12}
-      enemyKind="grunt"
-      combatState={createCombatState(1)}
+      enemyKind={enemyKind}
+      combatState={combatState}
       bestLevelResult={undefined}
       levelProgressPercentage={80}
-      levelNewCount={completionAction === 'continue' ? 4 : 0}
+      levelWordCount={25}
+      levelNewCount={levelNewCount}
       levelDueCount={0}
       nextReviewAt="2026-07-22T08:00:00.000Z"
       completionAction={completionAction}
@@ -64,14 +74,15 @@ function renderPractice({
       missedWordIds={new Set()}
       relatedBankNames={[]}
       wordMastered={false}
-      hideMonsterWord={false}
+      progressByWordId={{}}
+      disableMonsterSpeech={false}
       hideAnswerCount={false}
       hidePassageDuringQuestions={hidePassageDuringQuestions}
       preferSimilarDistractors={false}
       extraOptionCount={0}
       boostCount={0}
       timeScale={1}
-      speechSupported={false}
+      speechSupported={speechSupported}
       speechSpeaking={false}
       speechError=""
       speechVoiceName="自动选择"
@@ -91,12 +102,26 @@ function renderCompletion(
 describe('PracticeSession completion actions', () => {
   it('moves to the next unseen batch without repeating the completed group', () => {
     const html = renderCompletion('continue');
-    expect(html).toContain('学习下一组');
-    expect(html).toContain('下一轮不会重复本轮已学词');
+    expect(html).toContain('本关已引入 21 / 25 词');
+    expect(html).toContain('还剩 4 个新词，预计 1 批');
+    expect(html).toContain('继续本关 · 最多 4 新词');
   });
 
   it('offers the next level after the unlock threshold', () => {
     expect(renderCompletion('next')).toContain('挑战下一关');
+  });
+
+  it('offers a clearance retry after losing the final new-word batch', () => {
+    const html = renderPractice({
+      completionAction: 'continue',
+      levelNewCount: 0,
+      combatState: { ...createCombatState(8), phase: 'defeat' },
+    });
+
+    expect(html).toContain('25 个词已全部引入');
+    expect(html).toContain('薄弱词重新进行通关复核');
+    expect(html).toContain('重新挑战通关');
+    expect(html).not.toContain('等待到期复习');
   });
 
   it('returns to the map after the final level', () => {
@@ -199,5 +224,101 @@ describe('PracticeSession completion actions', () => {
     expect(html).toContain('自动前进已暂停');
     expect(html).toContain('AI 词汇教练');
     expect(html).not.toContain('answer-columns');
+  });
+
+  it('renders listening-to-meaning without revealing the target word', () => {
+    const item: AdaptiveStudyItem = {
+      word: TEST_WORDS[0],
+      mode: 'listen-meaning',
+      stage: 'sound',
+      chainIndex: 0,
+      chainPosition: 0,
+      chainRationale: {
+        kind: 'priority',
+        label: 'Boss 识破',
+        description: '听音识义',
+      },
+      chainPassage: {
+        text: 'Boss assessment.',
+        translation: 'Boss 考核。',
+        source: 'offline',
+      },
+    };
+    const html = renderPractice({
+      session: { ...completeSession, queue: [item], phase: 'asking' },
+      currentItem: item,
+      currentChainItems: [item],
+      speechSupported: true,
+    });
+
+    expect(html).toContain('听发音，选出正确释义');
+    expect(html).not.toContain(`<strong>${item.word.word}</strong>`);
+    expect(html).toContain('aria-label="播放单词发音"');
+  });
+
+  it('shows a finite three-stage Boss preview with dedicated Boss artwork', () => {
+    const entries = Array.from({ length: 12 }, (_, index) => ({
+      ...TEST_WORDS[index % TEST_WORDS.length],
+      id: `boss-word-${index}`,
+      word: `bossword${index}`,
+    }));
+    const plan = buildBossAssessmentPlan(
+      entries,
+      { version: 1, progress: {}, history: [] },
+      { speechPlayback: true },
+      new Date('2026-07-23T00:00:00Z'),
+    );
+    const html = renderPractice({
+      session: { ...completeSession, queue: plan, phase: 'preview' },
+      currentItem: plan[0],
+      currentChainItems: plan.slice(0, 4),
+      speechSupported: true,
+      enemyKind: 'boss',
+    });
+
+    expect(html).toContain('Boss · 第 1 / 3 阶段 · 识破');
+    expect(html).toContain('全场固定 12 题');
+    expect(html).toContain('开始识破阶段');
+    expect(html).not.toContain('只词怪已就位');
+    expect(html).toContain('combat-monster');
+    expect(html).not.toContain('monster-roster');
+  });
+
+  it('does not mislabel Boss victory as FSRS stable mastery', () => {
+    const html = renderPractice({
+      completionAction: 'next',
+      enemyKind: 'boss',
+      levelNewCount: 0,
+      combatState: {
+        ...createCombatState(12),
+        phase: 'victory',
+        answersResolved: 12,
+        correctAnswers: 12,
+      },
+      session: { ...completeSession, correctCount: 12 },
+    });
+
+    expect(html).toContain('三阶段已完成');
+    expect(html).not.toContain('稳定掌握 80%');
+  });
+
+  it('explains the Boss passing score after all twelve questions are answered', () => {
+    const html = renderPractice({
+      completionAction: 'continue',
+      enemyKind: 'boss',
+      levelNewCount: 0,
+      combatState: {
+        ...createCombatState(12, { requiredCorrectAnswers: 10 }),
+        phase: 'defeat',
+        answersResolved: 12,
+        correctAnswers: 9,
+      },
+      session: { ...completeSession, correctCount: 9 },
+    });
+
+    expect(html).toContain('未达到 10 / 12 及格线');
+    expect(html).toContain('至少答对 10 题才通过');
+    expect(html).toContain('所有学习记录均已保留');
+    expect(html).not.toContain('考核中止');
   });
 });

@@ -2350,19 +2350,19 @@ html[data-theme="dark"] .battle-passage-strip {
    area; the focus (currently duelled) monster stays front-and-centre. */
 .battle-scene.is-asking .monster-roster {
   --wheel-size: clamp(118px, 17.5vh, 186px);
-  --wheel-gap: clamp(72px, 8.4vw, 128px);
-  --wheel-depth: clamp(-88px, -7.5vw, -56px);
-  --wheel-turn: -16deg;
+  --orbit-radius: clamp(340px, 44vw, 600px);
+  --orbit-tilt: -7deg;
 }
 .battle-scene.is-asking .roster-monster.is-focus {
-  --focus-boost: 1.2;
+  --focus-boost: 1.8;
 }
 .battle-scene.is-asking .roster-monster {
   bottom: calc(clamp(10px, 2.6vh, 26px) - 50px);
 }
-.battle-scene.is-asking .roster-word {
-  font-size: clamp(17px, 1.6vw, 26px);
-  -webkit-text-stroke-width: 0.9px;
+.battle-scene.is-asking .monster-dialogue {
+  max-width: clamp(150px, 20vw, 210px);
+  padding: 8px 12px;
+  font-size: clamp(12px, 1.15vw, 15px);
 }
 
 .battle-start-panel {
@@ -2371,6 +2371,54 @@ html[data-theme="dark"] .battle-passage-strip {
   gap: 14px;
   padding: 18px 20px 12px;
   text-align: center;
+}
+
+.level-batch-brief,
+.boss-stage-brief {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  max-width: min(620px, 100%);
+  padding: 0 18px 10px;
+  border-bottom: 1px dashed var(--cp-border-strong);
+}
+
+.level-batch-brief strong,
+.boss-stage-brief strong {
+  color: var(--cp-text);
+  font-size: 16px;
+}
+
+.level-batch-brief span,
+.boss-stage-brief span {
+  color: var(--cp-text-muted);
+  font-size: 13px;
+}
+
+.level-batch-brief small,
+.boss-stage-brief small {
+  color: var(--cp-accent);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.boss-stage-brief strong {
+  color: var(--cp-danger);
+}
+
+.battle-scene.is-boss .boss-stage-brief {
+  padding: 10px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.62);
+  border-radius: 8px;
+  background: rgba(255, 250, 240, 0.82);
+  box-shadow: 0 8px 20px rgba(36, 36, 74, 0.12);
+  -webkit-backdrop-filter: blur(10px) saturate(1.08);
+  backdrop-filter: blur(10px) saturate(1.08);
+}
+
+html[data-theme="dark"] .battle-scene.is-boss .boss-stage-brief {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(31, 28, 61, 0.82);
 }
 
 .battle-scene.is-preview .battle-action-panel {
@@ -2400,7 +2448,7 @@ html[data-theme="dark"] .battle-passage-strip {
   flex: 0 0 auto;
   display: grid;
   min-height: 68px;
-  grid-template-columns: auto minmax(125px, 1fr) auto auto;
+  grid-template-columns: auto minmax(125px, 1fr) auto;
   align-items: center;
   gap: 12px;
   margin: 12px 14px 0;
@@ -2408,6 +2456,20 @@ html[data-theme="dark"] .battle-passage-strip {
   border: 0;
   background: transparent;
   box-shadow: none;
+}
+
+.battle-scene.is-boss .battle-header {
+  border: 1px solid rgba(255, 255, 255, 0.62);
+  border-radius: 12px;
+  background: rgba(255, 250, 240, 0.74);
+  box-shadow: 0 8px 22px rgba(36, 36, 74, 0.14);
+  -webkit-backdrop-filter: blur(12px) saturate(1.08);
+  backdrop-filter: blur(12px) saturate(1.08);
+}
+
+html[data-theme="dark"] .battle-scene.is-boss .battle-header {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(31, 28, 61, 0.74);
 }
 
 html[data-theme="dark"] .battle-header {
@@ -2442,15 +2504,13 @@ html[data-theme="dark"] .battle-header {
   height: 16px;
 }
 
-.battle-header-title,
-.enemy-status {
+.battle-header-title {
   display: grid;
   min-width: 0;
   gap: 4px;
 }
 
-.battle-header-title small,
-.enemy-status span {
+.battle-header-title small {
   overflow: hidden;
   color: var(--cp-text-muted);
   font-size: 9px;
@@ -2464,33 +2524,6 @@ html[data-theme="dark"] .battle-header {
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.enemy-status > div:first-child {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.enemy-status strong {
-  font-size: 11px;
-  white-space: nowrap;
-}
-
-.enemy-health {
-  height: 7px;
-  overflow: hidden;
-  border: 1px solid var(--cp-outline);
-  border-radius: 999px;
-  background: var(--cp-border);
-}
-
-.enemy-health span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  transition: width 220ms ease;
 }
 
 .battle-context-drawer {
@@ -2533,45 +2566,6 @@ html[data-theme="dark"] .battle-header {
   max-height: min(42vh, 360px);
 }
 
-.player-status,
-.enemy-status {
-  display: grid;
-  gap: 5px;
-}
-
-.player-status > span,
-.enemy-status > span {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--cp-text-muted);
-  font-size: 10px;
-  font-weight: 800;
-}
-
-.player-status svg {
-  width: 15px;
-  height: 15px;
-  color: var(--cp-link);
-}
-
-.shield-pips {
-  display: flex;
-  gap: 6px;
-}
-
-.shield-pips i {
-  width: 22px;
-  height: 8px;
-  border: 1px solid var(--cp-outline);
-  border-radius: 3px;
-  background: var(--cp-border);
-}
-
-.shield-pips i.is-full {
-  background: var(--cp-link);
-}
-
 .combo-status {
   display: grid;
   grid-template-columns: auto auto;
@@ -2602,18 +2596,6 @@ html[data-theme="dark"] .battle-header {
 .combo-status.is-active,
 .combo-status.is-active svg {
   color: var(--cp-gold);
-}
-
-.enemy-health {
-  height: 9px;
-}
-
-.enemy-health span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--cp-danger);
-  transition: width 220ms ease;
 }
 
 .combat-stage {
@@ -2701,21 +2683,31 @@ html[data-theme="dark"] .battle-header {
   color: var(--cp-link);
 }
 
-/* Gauntlet wheel: the focus monster stands front-and-centre while the rest
-   recede in 3D to both sides. --slot (signed distance from focus) and --dist
-   (its absolute value) come from the component; perspective + rotateY turn the
-   wheel so each side monster faces the duel. */
+/* Orbital carousel: monsters occupy fixed points on one 3D ring. Changing the
+   focus rotates the whole track, so the next opponent follows a real arc into
+   the foreground instead of sliding along a compressed horizontal line. */
 .monster-roster {
   position: relative;
   z-index: 2;
   width: 100%;
   height: 100%;
-  perspective: 1200px;
+  perspective: 1800px;
   pointer-events: none;
   --wheel-size: clamp(192px, 31vh, 316px);
-  --wheel-gap: clamp(132px, 15.5vw, 238px);
-  --wheel-depth: clamp(-104px, -9vw, -64px);
-  --wheel-turn: -20deg;
+  --orbit-radius: clamp(340px, 45vw, 620px);
+  --orbit-tilt: -9deg;
+}
+
+.monster-orbit-track {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  transform:
+    translateZ(calc(var(--orbit-radius) * -1))
+    rotateX(var(--orbit-tilt))
+    rotateY(0deg);
+  transition: transform 520ms cubic-bezier(0.2, 0.72, 0.25, 1);
+  will-change: transform;
 }
 
 .roster-monster {
@@ -2723,86 +2715,110 @@ html[data-theme="dark"] .battle-header {
   left: 50%;
   bottom: clamp(10px, 2.6vh, 26px);
   width: var(--wheel-size);
+  margin-left: calc(var(--wheel-size) * -0.5);
   --tier-scale: 1;
+  --status-opacity: 1;
   transform-origin: center bottom;
   transform:
-    translate(-50%, 0)
-    translateX(calc(var(--wheel-shift, 0) * var(--wheel-gap)))
-    translate3d(
-      calc(var(--slot, 0) * var(--wheel-gap)),
-      0,
-      calc(var(--dist, 0) * var(--wheel-depth))
-    )
-    rotateY(calc(var(--slot, 0) * var(--wheel-turn)))
+    rotateY(0deg)
+    translateZ(var(--orbit-radius))
+    rotateY(0deg)
     scale(calc(var(--tier-scale) * var(--focus-boost, 1)));
-  transition: transform 380ms cubic-bezier(0.22, 0.61, 0.36, 1), opacity 260ms ease, filter 260ms ease;
+  opacity: var(--status-opacity, 1);
+  transition: transform 520ms cubic-bezier(0.2, 0.72, 0.25, 1), opacity 420ms ease, filter 260ms ease;
   will-change: transform;
 }
 
-.roster-word-wrap {
+.monster-dialogue {
+  --bubble-bg: #fffdf2;
+  --bubble-ink: #2b224e;
   position: absolute;
-  z-index: 4;
-  bottom: 100%;
+  z-index: 7;
+  bottom: calc(100% - 8px);
   left: 50%;
-  translate: -50% 2px;
-  pointer-events: auto;
-}
-
-.roster-word {
-  display: block;
-  border: 0;
-  padding: 0 6px;
-  background: transparent;
-  cursor: pointer;
-  color: #fff;
-  font-family: 'Arial Rounded MT Bold', 'Arial Black', 'Segoe UI', system-ui, sans-serif;
-  font-size: clamp(18px, 1.9vw, 30px);
-  font-weight: 900;
-  letter-spacing: 0.4px;
-  white-space: nowrap;
-  -webkit-text-stroke: 1px rgba(43, 34, 78, 0.9);
-  paint-order: stroke fill;
-  text-shadow: 0 2px 0 rgba(43, 34, 78, 0.35), 0 5px 12px rgba(36, 36, 74, 0.3);
-}
-
-.roster-word:hover { filter: brightness(1.12); }
-
-.roster-monster.is-active .roster-word { color: var(--cp-warning); }
-.roster-monster.is-missed .roster-word { color: #ff6b6b; }
-.roster-monster.is-defeated .roster-word { opacity: 0.55; }
-
-.roster-word-pop {
-  position: absolute;
-  z-index: 6;
-  bottom: 100%;
-  left: 50%;
-  translate: -50% -4px;
-  display: none;
+  translate: -50% 0;
   width: max-content;
-  max-width: 240px;
-  padding: 6px 10px;
-  border-radius: 10px;
-  background: var(--cp-surface);
-  color: var(--cp-text);
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.4;
-  white-space: normal;
+  max-width: clamp(170px, 24vw, 240px);
+  padding: 10px 14px;
+  border: 3px solid var(--bubble-ink);
+  border-radius: 18px 18px 18px 6px;
+  background: var(--bubble-bg);
+  box-shadow: 5px 5px 0 rgba(43, 34, 78, 0.26);
+  color: var(--bubble-ink);
+  font-family: "Nunito", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-size: clamp(14px, 1.35vw, 18px);
+  font-weight: 900;
+  line-height: 1.25;
   text-align: center;
-  box-shadow: 0 8px 20px rgba(36, 36, 74, 0.24);
+  pointer-events: none;
+  transform-origin: 28px calc(100% + 12px);
+  animation: monster-dialogue-pop 360ms cubic-bezier(0.22, 1.25, 0.4, 1) both;
 }
 
-.roster-word-pop em {
+.monster-dialogue::before,
+.monster-dialogue::after {
+  content: "";
+  position: absolute;
+  left: 20px;
+  border-style: solid;
+  transform: skewX(-18deg);
+}
+
+.monster-dialogue::before {
+  bottom: -16px;
+  border-width: 16px 15px 0 0;
+  border-color: var(--bubble-ink) transparent transparent transparent;
+}
+
+.monster-dialogue::after {
+  bottom: -10px;
+  left: 23px;
+  border-width: 11px 10px 0 0;
+  border-color: var(--bubble-bg) transparent transparent transparent;
+}
+
+.monster-dialogue.is-staggered {
+  --bubble-bg: #fff0ed;
+  --bubble-ink: #8f2634;
+  animation-name: monster-dialogue-stagger;
+}
+
+.monster-dialogue.is-gloating {
+  --bubble-bg: #fff1a8;
+  --bubble-ink: #5b3510;
+  animation-name: monster-dialogue-gloat;
+}
+
+.monster-dialogue.level-fierce {
+  --bubble-bg: #ffe6a8;
+  --bubble-ink: #672b0d;
+  box-shadow: 6px 6px 0 rgba(103, 43, 13, 0.24);
+}
+
+.monster-dialogue.level-nemesis {
+  --bubble-bg: #ffd9d4;
+  --bubble-ink: #861f2e;
+  border-width: 4px;
+  box-shadow: 7px 7px 0 rgba(134, 31, 46, 0.24);
+}
+
+.roster-monster-speak {
   display: block;
-  color: var(--cp-text-muted);
-  font-style: normal;
-  font-size: 11px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  pointer-events: auto;
+  cursor: pointer;
 }
 
-.roster-word-wrap:hover .roster-word-pop,
-.roster-word:focus-visible + .roster-word-pop { display: block; }
+.roster-monster-speak:disabled {
+  pointer-events: none;
+  cursor: default;
+}
 
 .roster-monster img {
+  display: block;
   width: 100%;
   height: auto;
   object-fit: contain;
@@ -2822,9 +2838,9 @@ html[data-theme="dark"] .battle-header {
   filter: drop-shadow(0 14px 10px rgba(25, 24, 22, 0.34)) hue-rotate(-35deg) saturate(1.5) brightness(0.94);
 }
 
-.roster-monster.is-pending { opacity: 0.94; }
-.roster-monster.is-defeated { opacity: 0.52; filter: grayscale(0.55); }
-.roster-monster.is-missed { opacity: 0.86; }
+.roster-monster.is-pending { --status-opacity: 0.94; }
+.roster-monster.is-defeated { --status-opacity: 0.52; filter: grayscale(0.55); }
+.roster-monster.is-missed { --status-opacity: 0.86; }
 .roster-monster.is-missed img {
   filter: drop-shadow(0 9px 7px rgba(25, 24, 22, 0.3)) sepia(0.55) saturate(3) hue-rotate(-28deg);
 }
@@ -2832,12 +2848,7 @@ html[data-theme="dark"] .battle-header {
 /* The focus monster leans forward, reads brightest, and drives the idle bob. */
 .roster-monster.is-focus {
   --focus-boost: 1.12;
-  opacity: 1;
-}
-/* Side monsters' head words shrink and dim so the focus word stays legible. */
-.roster-monster:not(.is-focus) .roster-word {
-  font-size: 0.72em;
-  opacity: 0.82;
+  --status-opacity: 1;
 }
 .roster-monster.is-active img { animation: monster-idle 1.6s ease-in-out infinite; }
 .roster-monster.is-active.pose-hit img { animation: monster-hurt 320ms ease-out; }
@@ -2886,6 +2897,25 @@ html[data-theme="dark"] .battle-header {
 @keyframes monster-idle {
   0%, 100% { transform: translateY(0) scale(1); }
   50% { transform: translateY(-5px) scale(1.02); }
+}
+
+@keyframes monster-dialogue-pop {
+  0% { opacity: 0; transform: scale(0.55) rotate(-4deg); }
+  72% { opacity: 1; transform: scale(1.07) rotate(1deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0); }
+}
+
+@keyframes monster-dialogue-stagger {
+  0% { opacity: 0; transform: translateX(12px) scale(0.7) rotate(5deg); }
+  45% { opacity: 1; transform: translateX(-7px) scale(1.04) rotate(-3deg); }
+  72% { transform: translateX(3px) scale(1) rotate(1deg); }
+  100% { transform: translateX(0) scale(1) rotate(0); }
+}
+
+@keyframes monster-dialogue-gloat {
+  0% { opacity: 0; transform: translateY(10px) scale(0.65); }
+  58% { opacity: 1; transform: translateY(-5px) scale(1.08); }
+  100% { transform: translateY(0) scale(1); }
 }
 
 @keyframes monster-hurt {
@@ -3625,6 +3655,42 @@ html[data-theme="dark"] .battle-header {
   max-height: 42vh;
 }
 
+.inline-ai-sense-examples {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--cp-border);
+}
+
+.inline-ai-examples-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.inline-ai-examples-heading h4 {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  color: var(--cp-text);
+  font-size: 13px;
+}
+
+.inline-ai-examples-heading h4 svg {
+  width: 16px;
+  height: 16px;
+  color: var(--cp-accent);
+}
+
+.inline-ai-examples-heading > span {
+  color: var(--cp-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
 @media (max-width: 900px) {
   .inline-review-controls {
     grid-template-columns: minmax(0, 1fr);
@@ -3794,6 +3860,35 @@ html[data-theme="dark"] .battle-header {
   font-size: 13px;
 }
 
+.boss-assessment-brief {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 4px 18px;
+  width: min(720px, 100%);
+  margin: 18px auto 4px;
+  padding: 12px 4px;
+  border-block: 1px dashed var(--cp-border-strong);
+  text-align: left;
+}
+
+.boss-assessment-brief strong {
+  grid-row: 1 / 3;
+  color: var(--cp-danger);
+  font-size: 16px;
+}
+
+.boss-assessment-brief span {
+  color: var(--cp-text);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.boss-assessment-brief small {
+  color: var(--cp-text-muted);
+  font-size: 11px;
+}
+
 .skill-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 260px));
@@ -3934,12 +4029,6 @@ html[data-theme="dark"] .battle-header {
 
 .boost-maxed-state .primary-button {
   margin-top: 6px;
-}
-
-.roster-word.is-masked {
-  color: var(--cp-warning);
-  letter-spacing: 0;
-  -webkit-text-stroke-width: 0.6px;
 }
 
 .answer-title {
@@ -5313,6 +5402,16 @@ html[data-theme="dark"] .battle-header {
     border-radius: 0;
   }
 
+  .boss-assessment-brief {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    text-align: center;
+  }
+
+  .boss-assessment-brief strong {
+    grid-row: auto;
+  }
+
   .battle-glass-panel {
     right: 10px;
     left: 10px;
@@ -5332,29 +5431,75 @@ html[data-theme="dark"] .battle-header {
   }
 
   .battle-scene.is-asking .combat-hud {
-    flex-basis: clamp(182px, 25dvh, 224px);
-    min-height: clamp(182px, 25dvh, 224px);
+    flex-basis: clamp(232px, 31dvh, 274px);
+    min-height: clamp(232px, 31dvh, 274px);
   }
 
-  /* Cap the enlarged preview wheel so it never clips off narrow screens. */
+  /* Keep the same orbital motion on narrow screens while compressing only the
+     ring radius; the focus monster stays full-size and side monsters recede. */
   .monster-roster {
-    --wheel-size: clamp(150px, 34dvh, 232px);
-    --wheel-gap: clamp(72px, 20vw, 132px);
+    --wheel-size: clamp(150px, 30dvh, 210px);
+    --orbit-radius: clamp(112px, 32vw, 218px);
+    --orbit-tilt: -7deg;
+  }
+
+  .battle-scene.is-preview .roster-monster {
+    bottom: clamp(216px, 27dvh, 244px);
+  }
+
+  .battle-scene.is-preview:has(.battle-passage-strip) .battle-passage-strip {
+    flex: 0 1 auto;
+    width: calc(100% - 20px);
+    max-height: 26dvh;
+    margin: 8px 10px 0;
+    padding: 8px 10px;
+    overflow: auto;
+  }
+
+  .battle-scene.is-preview:has(.battle-passage-strip) .combat-hud {
+    flex: 0 0 clamp(190px, 26dvh, 220px);
+    min-height: clamp(190px, 26dvh, 220px);
+  }
+
+  .battle-scene.is-preview:has(.battle-passage-strip) .monster-roster {
+    --wheel-size: clamp(140px, 22dvh, 180px);
+    --orbit-radius: clamp(108px, 30vw, 200px);
+  }
+
+  .battle-scene.is-preview:has(.battle-passage-strip) .roster-monster {
+    bottom: clamp(122px, 15dvh, 136px);
+  }
+
+  .battle-scene.is-preview:has(.battle-passage-strip) .monster-dialogue {
+    bottom: calc(100% - 44px);
+  }
+
+  .battle-scene.is-preview:has(.battle-passage-strip) .battle-action-panel {
+    bottom: 0;
   }
 
   .battle-scene.is-asking .monster-roster {
     --wheel-size: clamp(94px, 18.5dvh, 134px);
-    --wheel-gap: clamp(40px, 13vw, 68px);
-    --wheel-depth: clamp(-64px, -11vw, -42px);
-    --wheel-turn: -15deg;
+    --orbit-radius: clamp(112px, 34vw, 230px);
+    --orbit-tilt: -6deg;
   }
 
   .battle-scene.is-asking .roster-monster {
     bottom: 4px;
   }
 
-  .battle-scene.is-asking .roster-word {
-    font-size: clamp(15px, 4vw, 19px);
+  .monster-dialogue {
+    max-width: min(160px, 48vw);
+    padding: 8px 10px;
+    border-width: 2px;
+    font-size: 13px;
+  }
+
+  .battle-scene.is-asking .monster-dialogue {
+    bottom: calc(100% - 36px);
+    max-width: min(142px, 42vw);
+    padding: 7px 9px;
+    font-size: 11px;
   }
 
   .battle-scene.is-preview .battle-context-panel {
@@ -5424,14 +5569,12 @@ html[data-theme="dark"] .battle-header {
   }
 
   .battle-header {
-    top: 10px;
-    right: 10px;
-    left: 10px;
-    min-height: 112px;
-    grid-template-columns: minmax(0, 1fr) minmax(92px, 0.72fr) auto;
-    grid-template-rows: auto auto;
-    gap: 8px 12px;
-    padding: 8px 10px;
+    min-height: 58px;
+    grid-template-columns: 36px minmax(0, 1fr) auto;
+    grid-template-rows: auto;
+    gap: 8px;
+    margin: 8px 10px 0;
+    padding: 6px 8px;
   }
 
   .battle-exit-button span {
@@ -5448,7 +5591,7 @@ html[data-theme="dark"] .battle-header {
   }
 
   .battle-header-title {
-    grid-column: 2 / -1;
+    grid-column: 2;
     grid-row: 1;
   }
 
@@ -5456,19 +5599,9 @@ html[data-theme="dark"] .battle-header {
     font-size: 11px;
   }
 
-  .player-status {
-    grid-column: 2;
-    grid-row: 2;
-  }
-
   .combo-status {
     grid-column: 3;
-    grid-row: 2;
-  }
-
-  .enemy-status {
-    grid-column: 3 / 4;
-    grid-row: 2;
+    grid-row: 1;
   }
 
   .battle-context-drawer {
@@ -5620,6 +5753,13 @@ html[data-theme="dark"] .battle-header {
   }
 }
 
+@media (max-width: 360px) {
+  .battle-scene.is-asking .combat-hud {
+    flex-basis: clamp(282px, 39dvh, 324px);
+    min-height: clamp(282px, 39dvh, 324px);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -5629,7 +5769,8 @@ html[data-theme="dark"] .battle-header {
   }
 
   .combat-monster,
-  .combat-feedback {
+  .combat-feedback,
+  .monster-dialogue {
     animation: none !important;
   }
 }

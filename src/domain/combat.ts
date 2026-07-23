@@ -1,6 +1,5 @@
 import type { GameMode } from './models';
 
-export const DEFAULT_PLAYER_SHIELD = 3;
 export const DEFAULT_BASE_DAMAGE = 10;
 export const CRITICAL_TIME_RATIO = 0.4;
 export const HINT_DAMAGE_MULTIPLIER = 0.7;
@@ -19,7 +18,7 @@ export const COMBAT_SKILLS: CombatSkill[] = [
     id: 'steady',
     name: '稳扎',
     description: '第一次答错不会清空已经积累的连击。',
-    tradeoff: '仍会损失 1 点护盾',
+    tradeoff: '仍会触发词怪反击',
   },
   {
     id: 'echo',
@@ -52,17 +51,15 @@ export interface CombatEvent {
   critical: boolean;
   combo: number;
   enemyDefeated: boolean;
-  playerShield: number;
 }
 
 export interface CombatState {
   phase: CombatPhase;
   skillId: CombatSkillId | null;
   skillTriggered: boolean;
-  playerShield: number;
-  maxPlayerShield: number;
   enemyHealth: number;
   maxEnemyHealth: number;
+  requiredCorrectAnswers: number;
   combo: number;
   bestCombo: number;
   answersResolved: number;
@@ -79,8 +76,8 @@ export type CombatAction =
   | { type: 'finish' };
 
 interface CombatOptions {
-  playerShield?: number;
   baseDamage?: number;
+  requiredCorrectAnswers?: number;
 }
 
 function clampPositiveInteger(value: number, fallback: number): number {
@@ -92,11 +89,11 @@ export function createCombatState(
   questionCount: number,
   options: CombatOptions = {},
 ): CombatState {
-  const maxPlayerShield = clampPositiveInteger(
-    options.playerShield ?? DEFAULT_PLAYER_SHIELD,
-    DEFAULT_PLAYER_SHIELD,
-  );
   const expectedQuestions = clampPositiveInteger(questionCount, 1);
+  const requiredCorrectAnswers = Math.min(
+    expectedQuestions,
+    Math.max(0, Math.floor(options.requiredCorrectAnswers ?? 0)),
+  );
   // One monster per question; the roster is cleared by facing every monster and
   // surviving, not by draining a shared health bar.
   const maxEnemyHealth = expectedQuestions;
@@ -105,10 +102,9 @@ export function createCombatState(
     phase: 'ready',
     skillId: null,
     skillTriggered: false,
-    playerShield: maxPlayerShield,
-    maxPlayerShield,
     enemyHealth: maxEnemyHealth,
     maxEnemyHealth,
+    requiredCorrectAnswers,
     combo: 0,
     bestCombo: 0,
     answersResolved: 0,
@@ -153,12 +149,10 @@ function calculateDamage(
 
 function event(
   state: CombatState,
-  values: Omit<CombatEvent, 'id' | 'playerShield'>,
-  playerShield = state.playerShield,
+  values: Omit<CombatEvent, 'id'>,
 ): CombatEvent {
   return {
     id: state.answersResolved + 1,
-    playerShield,
     ...values,
   };
 }
@@ -175,8 +169,6 @@ export function combatReducer(state: CombatState, action: CombatAction): CombatS
     const answersResolved = state.answersResolved + 1;
 
     if (!action.answer.correct) {
-      const playerShield = Math.max(0, state.playerShield - 1);
-      const defeated = playerShield === 0;
       const protectCombo = state.skillId === 'steady' && !state.skillTriggered;
       const combo = protectCombo ? state.combo : 0;
       // A missed monster still leaves the field (its turn passes), so the roster
@@ -184,19 +176,17 @@ export function combatReducer(state: CombatState, action: CombatAction): CombatS
       const enemyHealth = Math.max(0, state.enemyHealth - 1);
       return {
         ...state,
-        phase: defeated ? 'defeat' : 'fighting',
-        playerShield,
         enemyHealth,
         combo,
         skillTriggered: state.skillTriggered || protectCombo,
         answersResolved,
         lastEvent: event(state, {
-          kind: defeated ? 'defeat' : 'hurt',
+          kind: 'hurt',
           damage: 0,
           critical: false,
           combo,
           enemyDefeated: enemyHealth === 0,
-        }, playerShield),
+        }),
       };
     }
 
@@ -225,7 +215,8 @@ export function combatReducer(state: CombatState, action: CombatAction): CombatS
   }
 
   if (state.phase === 'victory' || state.phase === 'defeat') return state;
-  const victory = state.enemyHealth === 0 && state.playerShield > 0;
+  const victory = state.enemyHealth === 0
+    && state.correctAnswers >= state.requiredCorrectAnswers;
   return {
     ...state,
     phase: victory ? 'victory' : 'defeat',

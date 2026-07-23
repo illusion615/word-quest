@@ -12,6 +12,7 @@ export interface LevelGameResult {
 
 export interface GameProgressV1 {
   version: 1;
+  journeyLayoutVersion: 2;
   levelResults: Record<string, LevelGameResult>;
   clearedLevels: string[];
   clearedBossLevels: string[];
@@ -25,6 +26,7 @@ export interface GameProgressV1 {
 export function createEmptyGameProgress(): GameProgressV1 {
   return {
     version: 1,
+    journeyLayoutVersion: 2,
     levelResults: {},
     clearedLevels: [],
     clearedBossLevels: [],
@@ -75,6 +77,7 @@ export function recordLevelResult(
 
   return {
     version: 1,
+    journeyLayoutVersion: 2,
     levelResults: { ...progress.levelResults, [key]: result },
     clearedLevels,
     clearedBossLevels,
@@ -113,6 +116,42 @@ function isGameProgress(value: unknown): value is GameProgressV1 {
     && typeof candidate.totals === 'object';
 }
 
+function remapLegacyWordLevelKey(key: string): string {
+  const match = /^(.*:level:)(\d+)$/.exec(key);
+  if (!match) return key;
+  const legacyLevelNumber = Number.parseInt(match[2], 10);
+  if (!Number.isFinite(legacyLevelNumber) || legacyLevelNumber < 1) return key;
+  const insertedBossesBefore = Math.floor((legacyLevelNumber - 1) / 4);
+  return `${match[1]}${legacyLevelNumber + insertedBossesBefore}`;
+}
+
+function migrateJourneyLayout(value: Omit<GameProgressV1, 'journeyLayoutVersion'>): GameProgressV1 {
+  const clearedBossLevels = Array.isArray(value.clearedBossLevels)
+    ? value.clearedBossLevels
+    : [];
+  const historicalWins = Object.entries(value.levelResults)
+    .filter(([, result]) => result.wins > 0)
+    .map(([key]) => key);
+  const legacyCleared = Array.isArray(value.clearedLevels)
+    ? value.clearedLevels
+    : historicalWins;
+  const levelResults = Object.fromEntries(Object.entries(value.levelResults).flatMap(([key, result]) => {
+    const migrated = [[remapLegacyWordLevelKey(key), result] as const];
+    return clearedBossLevels.includes(key) ? [...migrated, [key, result] as const] : migrated;
+  }));
+
+  return {
+    ...value,
+    journeyLayoutVersion: 2,
+    levelResults,
+    clearedLevels: Array.from(new Set([
+      ...legacyCleared.map(remapLegacyWordLevelKey),
+      ...clearedBossLevels,
+    ])),
+    clearedBossLevels,
+  };
+}
+
 export function parseGameProgress(raw: string | null): GameProgressV1 {
   if (!raw) return createEmptyGameProgress();
   try {
@@ -121,7 +160,7 @@ export function parseGameProgress(raw: string | null): GameProgressV1 {
     const wonLevelKeys = Object.entries(value.levelResults)
       .filter(([, result]) => result.wins > 0)
       .map(([key]) => key);
-    return {
+    const normalized = {
       ...value,
       clearedLevels: Array.isArray(value.clearedLevels)
         ? value.clearedLevels
@@ -130,6 +169,9 @@ export function parseGameProgress(raw: string | null): GameProgressV1 {
         ? value.clearedBossLevels
         : [],
     };
+    return value.journeyLayoutVersion === 2
+      ? { ...normalized, journeyLayoutVersion: 2 }
+      : migrateJourneyLayout(normalized);
   } catch {
     return createEmptyGameProgress();
   }

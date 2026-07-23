@@ -14,7 +14,6 @@ function event(overrides: Partial<CombatEvent>): CombatEvent {
     critical: false,
     combo: 1,
     enemyDefeated: false,
-    playerShield: 3,
     ...overrides,
   };
 }

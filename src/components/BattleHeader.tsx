@@ -1,4 +1,4 @@
-import { ArrowLeft, Shield, Zap } from '../icons';
+import { ArrowLeft, Zap } from '../icons';
 import { COMBAT_SKILLS, type CombatState } from '../domain/combat';
 
 interface BattleHeaderProps {
@@ -30,21 +30,11 @@ export function BattleHeader({
         <strong>{title}</strong>
       </div>
 
-      <div className="player-status">
-        <span><Shield aria-hidden="true" /> 卷王护盾</span>
-        <div className="shield-pips" aria-label={`剩余护盾 ${state.playerShield} / ${state.maxPlayerShield}`}>
-          {Array.from({ length: state.maxPlayerShield }, (_, index) => (
-            <i key={index} className={index < state.playerShield ? 'is-full' : ''} />
-          ))}
-        </div>
-      </div>
-
       <div className={`combo-status ${state.combo >= 2 ? 'is-active' : ''}`}>
         <Zap aria-hidden="true" />
         <strong>{state.combo}</strong>
         <span>连击{boostCount > 0 ? ` · 加成×${boostCount}` : (selectedSkill ? ` · ${selectedSkill.name}` : '')}</span>
       </div>
-
     </header>
   );
 }

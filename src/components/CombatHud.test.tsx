@@ -18,7 +18,6 @@ function event(kind: CombatEvent['kind'], enemyDefeated = false): CombatEvent {
     critical: false,
     combo: 1,
     enemyDefeated,
-    playerShield: 3,
   };
 }
 
@@ -60,5 +59,14 @@ describe('combat monster artwork', () => {
       .toMatchObject({ alt: '进入狂暴阶段的词怪领主', visualState: 'is-enraged' });
     expect(resolveMonsterArtwork(fightingState({ enemyHealth: 0, maxEnemyHealth: 100 }), 'boss', 'defeated'))
       .toMatchObject({ alt: '倒下的词怪领主', visualState: 'is-defeated' });
+  });
+
+  it('changes Boss artwork exactly at the 12-question stage boundaries', () => {
+    expect(resolveMonsterArtwork(fightingState({ enemyHealth: 12, maxEnemyHealth: 12 }), 'boss'))
+      .toMatchObject({ visualState: 'is-idle' });
+    expect(resolveMonsterArtwork(fightingState({ enemyHealth: 8, maxEnemyHealth: 12 }), 'boss'))
+      .toMatchObject({ visualState: 'is-wounded' });
+    expect(resolveMonsterArtwork(fightingState({ enemyHealth: 4, maxEnemyHealth: 12 }), 'boss'))
+      .toMatchObject({ visualState: 'is-enraged' });
   });
 });

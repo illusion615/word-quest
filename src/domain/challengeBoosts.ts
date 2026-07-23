@@ -9,8 +9,7 @@ export type BoostId =
   | 'hiddenCount'
   | 'hiddenPassage'
   | 'similarDistractors'
-  | 'extraOptions'
-  | 'thinShield';
+  | 'extraOptions';
 
 export interface BoostDef {
   id: BoostId;
@@ -25,14 +24,14 @@ export const BOOST_DEFS: readonly BoostDef[] = [
   {
     id: 'haste',
     name: '疾风',
-    description: '每道题的作答时间再缩短 10%。',
+    description: '每道题的作答时间再缩短 10%；输入与听音题最低保留 15 秒。',
     stackable: true,
     maxStacks: 5,
   },
   {
     id: 'silentWord',
     name: '蒙面',
-    description: '词怪头顶不再显示目标词，只能靠记忆辨认。',
+    description: '词怪不再提供额外点读，只能靠题面线索辨认。',
     stackable: false,
     maxStacks: 1,
   },
@@ -53,7 +52,7 @@ export const BOOST_DEFS: readonly BoostDef[] = [
   {
     id: 'similarDistractors',
     name: '拟态',
-    description: '干扰项优先使用相同词性、相近词频的单词。',
+    description: '看义题优先同词性近词频；听音辨词优先相近发音。',
     stackable: false,
     maxStacks: 1,
   },
@@ -61,13 +60,6 @@ export const BOOST_DEFS: readonly BoostDef[] = [
     id: 'extraOptions',
     name: '人海',
     description: '选择题额外增加 1 个干扰项。',
-    stackable: true,
-    maxStacks: 2,
-  },
-  {
-    id: 'thinShield',
-    name: '薄甲',
-    description: '卷王护盾上限减少 1 格。',
     stackable: true,
     maxStacks: 2,
   },
@@ -79,8 +71,8 @@ export type ActiveBoosts = Partial<Record<BoostId, number>>;
 export interface BoostEffects {
   /** Multiplier applied to every question's time limit. */
   timeScale: number;
-  /** Hide the target word floating above each monster. */
-  hideMonsterWord: boolean;
+  /** Disable the optional pronunciation available by clicking a monster. */
+  disableMonsterSpeech: boolean;
   /** Hide the "共 N 项" hint on meaning-selection questions. */
   hideAnswerCount: boolean;
   /** Hide the generated reading after its preview phase. */
@@ -89,8 +81,6 @@ export interface BoostEffects {
   preferSimilarDistractors: boolean;
   /** Number of distractors added to supported choice questions. */
   extraOptionCount: number;
-  /** Amount subtracted from the combat shield at battle start. */
-  shieldPenalty: number;
 }
 
 const HASTE_STEP = 0.9;
@@ -116,12 +106,11 @@ export function boostEffects(active: ActiveBoosts): BoostEffects {
   const haste = boostStacks(active, 'haste');
   return {
     timeScale: Math.max(MIN_TIME_SCALE, HASTE_STEP ** haste),
-    hideMonsterWord: boostStacks(active, 'silentWord') > 0,
+    disableMonsterSpeech: boostStacks(active, 'silentWord') > 0,
     hideAnswerCount: boostStacks(active, 'hiddenCount') > 0,
     hidePassageDuringQuestions: boostStacks(active, 'hiddenPassage') > 0,
     preferSimilarDistractors: boostStacks(active, 'similarDistractors') > 0,
     extraOptionCount: boostStacks(active, 'extraOptions'),
-    shieldPenalty: boostStacks(active, 'thinShield'),
   };
 }
 

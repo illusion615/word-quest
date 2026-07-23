@@ -9,7 +9,7 @@ import type { ResolvedAnswerEvent } from '../domain/session';
 
 export interface CombatController {
   state: CombatState;
-  prepareCombat: (questionCount: number, playerShield?: number) => void;
+  prepareCombat: (questionCount: number, requiredCorrectAnswers?: number) => void;
   chooseSkill: (skillId: CombatSkillId) => void;
   resolveAnswer: (event: ResolvedAnswerEvent) => void;
   finishCombat: () => void;
@@ -21,8 +21,8 @@ const initialState = createCombatState(1);
 export function useCombat(): CombatController {
   const [state, setState] = useState<CombatState>(initialState);
 
-  const prepareCombat = useCallback((questionCount: number, playerShield?: number) => {
-    setState(createCombatState(questionCount, { playerShield }));
+  const prepareCombat = useCallback((questionCount: number, requiredCorrectAnswers = 0) => {
+    setState(createCombatState(questionCount, { requiredCorrectAnswers }));
   }, []);
 
   const chooseSkill = useCallback((skillId: CombatSkillId) => {

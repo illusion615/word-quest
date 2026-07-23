@@ -27,6 +27,7 @@ export const CHAIN_POOL_SIZE = 14;
 export const CHAIN_TARGET_SIZE = 6;
 export const CHAIN_MAX_SIZE = 8;
 export const CHAIN_OFFLINE_SIZE = 4;
+export const CLEARANCE_REVIEW_SIZE = 8;
 export const ACTIVE_RECALL_STABILITY_DAYS = 7;
 
 // Keep enough candidates per priority tier to fill every chain's pool even when
@@ -60,17 +61,25 @@ export function getAdaptiveStage(
   // and read aloud, and the learner picks its meaning(s).
   if (!progress) return { stage: 'new', mode: 'match-meaning', label: '识义建立' };
   if (progress.card.state === State.Learning || progress.card.state === State.Relearning) {
-    return { stage: 'sound', mode: 'match-meaning', label: '巩固识义' };
+    const usesAudio = capabilities.speechPlayback && progress.attempts % 2 === 1;
+    return usesAudio
+      ? { stage: 'sound', mode: 'listen-meaning', label: '听音识义' }
+      : { stage: 'sound', mode: 'match-meaning', label: '巩固识义' };
   }
-  // A steadier word flips the prompt: given the Chinese meaning, pick the word.
+  // A steadier word alternates recognition with contextual typed recall.
   if (progress.card.stability < ACTIVE_RECALL_STABILITY_DAYS) {
-    return { stage: 'context', mode: 'match-word', label: '中文辨形' };
+    return progress.attempts % 2 === 0
+      ? { stage: 'context', mode: 'match-word', label: '中文辨形' }
+      : { stage: 'context', mode: 'sentence', label: '语境填空' };
   }
-  // The most stable words demand pure listening recall; without speech we fall
-  // back to the meaning-to-word form.
-  return capabilities.speechPlayback
-    ? { stage: 'recall', mode: 'listen-word', label: '听音提取' }
-    : { stage: 'recall', mode: 'match-word', label: '辨形提取' };
+  // Stable words alternate audio recognition and full audio spelling; without
+  // speech support the meaning-to-word form remains usable.
+  if (!capabilities.speechPlayback) {
+    return { stage: 'recall', mode: 'match-word', label: '辨形提取' };
+  }
+  return progress.attempts % 2 === 1
+    ? { stage: 'recall', mode: 'listen-word', label: '听音辨词' }
+    : { stage: 'recall', mode: 'listening', label: '听音拼写' };
 }
 
 function candidateStage(candidate: StudyCandidate, state: LearningState): LearningStage {
@@ -183,6 +192,45 @@ export function buildOfflineChain(
   const size = Math.max(CHAIN_OFFLINE_SIZE, blueprint.seeds.length);
   const words = [...blueprint.seeds, ...fill].slice(0, size);
   return materializeChain(blueprint, words, offlinePassage(words, note), state, capabilities);
+}
+
+/**
+ * A failed final batch can leave an uncleared level with no unseen or due words.
+ * This finite retry selects its weakest introduced words without changing FSRS
+ * due dates, so the player can still earn the required battle victory.
+ */
+export function buildClearanceReview(
+  entries: readonly WordEntry[],
+  state: LearningState,
+  capabilities: StudyCapabilities = DEFAULT_STUDY_CAPABILITIES,
+): AdaptiveStudyItem[] {
+  const words = [...entries]
+    .filter((word) => Boolean(state.progress[word.id]))
+    .sort((left, right) => {
+      const leftProgress = state.progress[left.id]!;
+      const rightProgress = state.progress[right.id]!;
+      return leftProgress.mastery - rightProgress.mastery
+        || leftProgress.card.stability - rightProgress.card.stability
+        || left.word.localeCompare(right.word);
+    })
+    .slice(0, CLEARANCE_REVIEW_SIZE);
+  const passage = offlinePassage(words, '本关新词已全部引入，当前进行通关复核。');
+  return words.map((word, chainPosition) => {
+    const adaptive = getAdaptiveStage(state.progress[word.id], capabilities);
+    return {
+      word,
+      mode: adaptive.mode,
+      stage: adaptive.stage,
+      chainIndex: 0,
+      chainPosition,
+      chainRationale: {
+        kind: 'priority',
+        label: '通关复核',
+        description: '复核本关薄弱词，赢下本场即可通关。',
+      },
+      chainPassage: passage,
+    };
+  });
 }
 
 export function getChainItems(

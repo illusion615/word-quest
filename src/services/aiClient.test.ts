@@ -32,6 +32,16 @@ const AI_CONFIG = {
   apiKey: 'session-secret',
 };
 
+const PERFECT_WORD: WordEntry = {
+  id: 'perfect',
+  word: 'perfect',
+  phonetic: "/'pә:fikt/",
+  partOfSpeech: 'noun',
+  definition: 'v. make perfect or complete；a. complete without defect；s. precisely accurate',
+  definitionZh: 'n. 完成时；a. 完美的, 完好的, 理想的；vt. 使完美, 改善',
+  banks: ['gaokao'],
+};
+
 function entry(word: string, partOfSpeech = 'noun'): WordEntry {
   return { ...TEST_WORDS[0], id: word.toLowerCase(), word, partOfSpeech };
 }
@@ -90,11 +100,14 @@ describe('AI client', () => {
 
   it('requests structured coaching and per-sense examples in the selected output language', async () => {
     const explanation = {
-      coachMarkdown: '### Memory cue\n\n**Achieve** a goal.',
+      coachMarkdown: '### Memory cue\n\n**Perfect** can describe a result or the act of improving it.',
       senseExamples: [
-        { language: 'zh', senseIndex: 0, sentence: 'She achieved her goal.', translation: '彼女は目標を達成した。' },
-        { language: 'zh', senseIndex: 1, sentence: 'The team achieved success.', translation: 'チームは成功を収めた。' },
-        { language: 'en', senseIndex: 0, sentence: 'Practice helps you achieve more.', translation: '練習はより多くを達成する助けになる。' },
+        { language: 'zh', senseIndex: 0, sentence: 'The present perfect connects a past action to the present.', translation: '現在完了形は過去の動作を現在につなげます。' },
+        { language: 'zh', senseIndex: 1, sentence: 'Her pronunciation is nearly perfect.', translation: '彼女の発音はほぼ完璧です。' },
+        { language: 'zh', senseIndex: 2, sentence: 'She perfected the design before launch.', translation: '彼女は発売前に設計を完成させました。' },
+        { language: 'en', senseIndex: 0, sentence: 'Daily practice perfected his technique.', translation: '毎日の練習が彼の技術を完成させました。' },
+        { language: 'en', senseIndex: 1, sentence: 'This is a perfect solution.', translation: 'これは完璧な解決策です。' },
+        { language: 'en', senseIndex: 2, sentence: 'The copy is a perfect match.', translation: 'そのコピーは完全に一致しています。' },
       ],
     };
     const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
@@ -107,17 +120,26 @@ describe('AI client', () => {
         ...DEFAULT_AI_CONFIG,
         apiKey: 'session-secret',
         outputLanguage: 'Japanese',
-      }, TEST_WORDS[0]);
+      }, PERFECT_WORD);
       const request = fetcher.mock.calls[0][1];
       const body = JSON.parse(String(request?.body));
       const systemPrompt = body.messages[0].content;
       expect(systemPrompt).toContain('GitHub-flavored Markdown');
       expect(systemPrompt).toContain('exactly three level-3');
       expect(systemPrompt).toContain('raw HTML');
+      expect(systemPrompt).toContain('explain EVERY supplied Chinese sense');
+      expect(systemPrompt).toContain('grammar or technical term');
+      expect(systemPrompt).toContain('standard form or pattern');
+      expect(systemPrompt).toContain('common mistake or limitation');
+      expect(systemPrompt).toContain('changes pronunciation or stress');
+      expect(systemPrompt).toContain('exact part of speech');
       expect(systemPrompt).toContain('Respond in Japanese.');
+      const userPayload = JSON.parse(body.messages[1].content);
+      expect(userPayload.chineseSenses.map((sense: { label: string }) => sense.label))
+        .toEqual(['n.', 'a.', 'vt.']);
       expect(body.response_format.json_schema.name).toBe('wordbuddy_word_explanation');
       expect(result.markdown).toContain('Memory cue');
-      expect(result.senseExamples).toHaveLength(3);
+      expect(result.senseExamples).toHaveLength(6);
     } finally {
       vi.unstubAllGlobals();
     }
@@ -133,6 +155,21 @@ describe('AI client', () => {
 
     expect(() => parseWordExplanation(content, 2, 1))
       .toThrow('AI 未给出中文第 2 个义项的例句');
+  });
+
+  it('ignores additional examples outside the supplied sense indexes', () => {
+    const content = JSON.stringify({
+      coachMarkdown: '### 记忆\n\n提示',
+      senseExamples: [
+        { language: 'zh', senseIndex: 0, sentence: 'She achieved her goal.', translation: '她实现了目标。' },
+        { language: 'en', senseIndex: 0, sentence: 'Practice helps you achieve more.', translation: '练习帮助你取得更多成果。' },
+        { language: 'zh', senseIndex: 99, sentence: 'An extra generic example.', translation: '一条额外的通用例句。' },
+      ],
+    });
+
+    const result = parseWordExplanation(content, 1, 1);
+    expect(result.senseExamples).toHaveLength(2);
+    expect(result.senseExamples.some((example) => example.senseIndex === 99)).toBe(false);
   });
 
   it('generates a natural reading and reports the words it used', async () => {

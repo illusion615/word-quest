@@ -10,13 +10,13 @@ const maxedBoosts: ActiveBoosts = {
   hiddenPassage: 1,
   similarDistractors: 1,
   extraOptions: 2,
-  thinShield: 2,
 };
 
 function renderPrep(activeBoosts: ActiveBoosts, offers = BOOST_DEFS.slice(0, 3)): string {
   return renderToStaticMarkup(
     <ChallengePrep
       levelNumber={8}
+      levelKind="normal"
       activeBoosts={activeBoosts}
       offers={[...offers]}
       droppedBoostName={null}
@@ -43,5 +43,25 @@ describe('ChallengePrep', () => {
     expect(html).toContain('选择加成');
     expect(html).toContain('当前 1/5');
     expect(html).not.toContain('你是卷王');
+  });
+
+  it('explains that Boss assessment is finite before battle', () => {
+    const html = renderToStaticMarkup(
+      <ChallengePrep
+        levelNumber={5}
+        levelKind="boss"
+        activeBoosts={{}}
+        offers={[BOOST_DEFS[0]]}
+        droppedBoostName={null}
+        onChoose={() => undefined}
+        onContinue={() => undefined}
+        onExit={() => undefined}
+      />,
+    );
+
+    expect(html).toContain('固定 12 题 · 一场结束');
+    expect(html).toContain('识破 4 题 · 破甲 4 题 · 终结 4 题');
+    expect(html).toContain('不引入新词');
+    expect(html).toContain('至少答对 10 题');
   });
 });

@@ -16,7 +16,8 @@ interface BattleSceneProps {
   preview?: boolean;
   roster?: WaveMonster[];
   onSpeak?: (text: string) => void;
-  hideWord?: boolean;
+  disableMonsterSpeech?: boolean;
+  concealMonsterWords?: boolean;
   boostCount?: number;
   rosterFocusWordId?: string;
 }
@@ -32,7 +33,8 @@ export function BattleScene({
   preview = false,
   roster,
   onSpeak,
-  hideWord = false,
+  disableMonsterSpeech = false,
+  concealMonsterWords = false,
   boostCount = 0,
   rosterFocusWordId,
 }: BattleSceneProps) {
@@ -50,7 +52,7 @@ export function BattleScene({
         boostCount={boostCount}
       />
       {passage && <div className="battle-passage-strip">{passage}</div>}
-      <CombatHud state={state} levelNumber={levelNumber} enemyKind={enemyKind} roster={roster} onSpeak={onSpeak} hideWord={hideWord} focusWordId={rosterFocusWordId} />
+      <CombatHud state={state} levelNumber={levelNumber} enemyKind={enemyKind} roster={roster} onSpeak={onSpeak} disableMonsterSpeech={disableMonsterSpeech} concealWords={concealMonsterWords} focusWordId={rosterFocusWordId} />
       <div className="battle-action-panel">{children}</div>
     </section>
   );

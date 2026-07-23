@@ -47,7 +47,6 @@ describe('achievements', () => {
         hiddenPassage: 1,
         similarDistractors: 1,
         extraOptions: 2,
-        thinShield: 2,
       },
     });
     const unlocked = newlyUnlockedAchievements(current, createEmptyAchievementState());
@@ -96,7 +95,6 @@ describe('achievements', () => {
         hiddenPassage: 1,
         similarDistractors: 1,
         extraOptions: 2,
-        thinShield: 2,
       },
     });
     const definition = ACHIEVEMENTS.find((achievement) => achievement.id === 'word-king')!;

@@ -28,13 +28,14 @@ export interface StudyAvailability {
 }
 
 const DEFAULT_TIME_LIMITS = {
-  listening: 12_000,
+  listening: 22_000,
   choice: 15_000,
-  sentence: 20_000,
-  boss: 10_000,
+  sentence: 25_000,
+  boss: 22_000,
   'match-meaning': 18_000,
+  'listen-meaning': 20_000,
   'match-word': 15_000,
-  'listen-word': 15_000,
+  'listen-word': 20_000,
 } as const;
 
 // Option-picking modes exclude an Easy grade: a fast tap can be a lucky guess,
@@ -42,6 +43,7 @@ const DEFAULT_TIME_LIMITS = {
 const RECOGNITION_MODES = new Set<GameMode>([
   'choice',
   'match-meaning',
+  'listen-meaning',
   'match-word',
   'listen-word',
 ]);

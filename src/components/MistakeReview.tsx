@@ -11,6 +11,7 @@ const MODE_LABELS: Record<GameMode, string> = {
   sentence: '语境填空',
   boss: '极限挑战',
   'match-meaning': '识义选择',
+  'listen-meaning': '听音识义',
   'match-word': '中文辨形',
   'listen-word': '听音辨词',
 };

@@ -4,11 +4,12 @@ import { TEST_WORDS } from '../test/fixtures/words';
 import type { LearningState, WordEntry } from './models';
 import {
   BOSS_LEVEL_INTERVAL,
+  NORMAL_LEVELS_PER_BOSS,
   WORDS_PER_LEVEL,
   buildBankJourney,
+  buildJourneyNodeSpecs,
   getBossLevelEntries,
   getJourneyLevelEntries,
-  isBossLevelNumber,
   levelFrequencyLabel,
   orderByFrequencyCurve,
   resolveLevelCompletionAction,
@@ -47,12 +48,37 @@ function learningState(masteredIds: string[] = []): LearningState {
 }
 
 describe('bank learning journey', () => {
+  it('inserts a non-word-consuming Boss after each four normal levels', () => {
+    const nodes = buildJourneyNodeSpecs(WORDS_PER_LEVEL * NORMAL_LEVELS_PER_BOSS);
+
+    expect(nodes.map((node) => node.kind)).toEqual([
+      'normal', 'normal', 'normal', 'normal', 'boss',
+    ]);
+    expect(nodes.at(-1)).toMatchObject({
+      kind: 'boss',
+      normalGroupIndex: null,
+      reviewGroupStart: 0,
+      reviewGroupEnd: NORMAL_LEVELS_PER_BOSS,
+    });
+  });
+
+  it('ends a partial final group with one finite Boss assessment', () => {
+    const nodes = buildJourneyNodeSpecs(WORDS_PER_LEVEL * (NORMAL_LEVELS_PER_BOSS + 2));
+
+    expect(nodes.map((node) => node.kind)).toEqual([
+      'normal', 'normal', 'normal', 'normal', 'boss',
+      'normal', 'normal', 'boss',
+    ]);
+    expect(nodes.at(-1)).toMatchObject({ reviewGroupStart: 4, reviewGroupEnd: 6 });
+  });
+
   it('splits a large bank into stable 25-word levels and balanced chapters', () => {
     const words = entries(3677);
     const journey = buildBankJourney(words, learningState());
+    const normalLevelCount = Math.ceil(3677 / WORDS_PER_LEVEL);
 
-    expect(journey.totalLevels).toBe(Math.ceil(3677 / WORDS_PER_LEVEL));
-    expect(journey.chapters).toHaveLength(8);
+    expect(journey.totalLevels).toBe(normalLevelCount + Math.ceil(normalLevelCount / NORMAL_LEVELS_PER_BOSS));
+    expect(journey.chapters).toHaveLength(10);
     expect(Math.max(...journey.chapters.map((chapter) => chapter.levels.length))
       - Math.min(...journey.chapters.map((chapter) => chapter.levels.length))).toBeLessThanOrEqual(1);
     expect(journey.chapters.flatMap((chapter) => chapter.levels)).toHaveLength(journey.totalLevels);
@@ -78,10 +104,10 @@ describe('bank learning journey', () => {
     const learningOnlyLevels = learningOnly.chapters.flatMap((chapter) => chapter.levels);
     const clearedLevels = cleared.chapters.flatMap((chapter) => chapter.levels);
 
-    expect(learningOnlyLevels.map((level) => level.status)).toEqual(['active', 'locked', 'locked']);
+    expect(learningOnlyLevels.map((level) => level.status)).toEqual(['active', 'locked', 'locked', 'locked']);
     expect(learningOnlyLevels[0].progressPercentage).toBe(stablePercentage);
     expect(learningOnly.activeLevelIndex).toBe(0);
-    expect(clearedLevels.map((level) => level.status)).toEqual(['completed', 'active', 'locked']);
+    expect(clearedLevels.map((level) => level.status)).toEqual(['completed', 'active', 'locked', 'locked']);
     expect(cleared.activeLevelIndex).toBe(1);
   });
 
@@ -106,6 +132,7 @@ describe('bank learning journey', () => {
     expect(first).toHaveLength(WORDS_PER_LEVEL);
     expect(first.every((word) => !previousIds.has(word.id))).toBe(true);
     expect(getJourneyLevelEntries(words, 2)).toHaveLength(20);
+    expect(getJourneyLevelEntries(words, 3)).toEqual([]);
   });
 
   it('mixes frequency bands while shifting from common-led to rare-led levels', () => {
@@ -142,11 +169,10 @@ describe('bank learning journey', () => {
     const rankById = new Map(words.map((word, index) => [word.id, index]));
     const above = new Set(['cet4', 'cet6', 'ky', 'gre']);
     const isBelow = (word: WordEntry) => !word.sourceTags?.some((tag) => above.has(tag));
-    const totalLevels = Math.ceil(words.length / WORDS_PER_LEVEL);
-    const fullLevels = Array.from(
-      { length: totalLevels - 1 },
-      (_, index) => getJourneyLevelEntries(words, index, 'gaokao'),
-    );
+    const fullLevels = buildBankJourney(words, learningState(), 'gaokao').chapters
+      .flatMap((chapter) => chapter.levels)
+      .filter((level) => level.kind === 'normal' && level.wordCount === WORDS_PER_LEVEL)
+      .map((level) => getJourneyLevelEntries(words, level.globalIndex, 'gaokao'));
     const bandCounts = (level: WordEntry[]) => level.reduce((counts, word) => {
       const rank = rankById.get(word.id) ?? 0;
       counts[Math.min(3, Math.floor((rank / words.length) * 4))] += 1;
@@ -172,8 +198,8 @@ describe('bank learning journey', () => {
 
     expect(levels[0]?.kind).toBe('normal');
     expect(levels[BOSS_LEVEL_INTERVAL - 1]?.kind).toBe('boss');
-    expect(isBossLevelNumber(BOSS_LEVEL_INTERVAL)).toBe(true);
-    expect(isBossLevelNumber(BOSS_LEVEL_INTERVAL - 1)).toBe(false);
+    expect(levels[BOSS_LEVEL_INTERVAL - 1]).toMatchObject({ newCount: 0, wordCount: WORDS_PER_LEVEL * 4 });
+    expect(levels[BOSS_LEVEL_INTERVAL]?.kind).toBe('normal');
   });
 
   it('labels the visible difficulty curve from common-led to rare-led', () => {
@@ -182,17 +208,21 @@ describe('bank learning journey', () => {
     expect(levelFrequencyLabel(9, 10)).toBe('低频为主 · 保留高频');
   });
 
-  it('keeps the boss level own word pool and appends prior review candidates', () => {
+  it('builds the Boss pool exclusively from its preceding normal levels', () => {
     const words = entries(WORDS_PER_LEVEL * BOSS_LEVEL_INTERVAL);
-    const weakestIds = getJourneyLevelEntries(words, 0).map((word) => word.id);
-    const progress = Object.fromEntries(weakestIds.slice(0, 10).map((wordId) => [wordId, {
-      wordId,
+    const priorWords = Array.from(
+      { length: NORMAL_LEVELS_PER_BOSS },
+      (_, index) => getJourneyLevelEntries(words, index),
+    ).flat();
+    const weakestIds = new Set(priorWords.slice(0, 10).map((word) => word.id));
+    const progress = Object.fromEntries(priorWords.map((word) => [word.id, {
+      wordId: word.id,
       attempts: 6,
-      correct: 6,
-      mastery: 100,
+      correct: weakestIds.has(word.id) ? 1 : 6,
+      mastery: weakestIds.has(word.id) ? 17 : 100,
       card: {
         due: '2026-07-21T00:00:00.000Z',
-        stability: 1,
+        stability: weakestIds.has(word.id) ? 1 : 10,
         difficulty: 5,
         elapsed_days: 0,
         scheduled_days: 1,
@@ -209,19 +239,13 @@ describe('bank learning journey', () => {
       BOSS_LEVEL_INTERVAL - 1,
     );
 
-    const currentLevelIds = getJourneyLevelEntries(
-      words,
-      BOSS_LEVEL_INTERVAL - 1,
-    ).map((word) => word.id);
     const priorIds = new Set(Array.from(
       { length: BOSS_LEVEL_INTERVAL - 1 },
       (_, index) => getJourneyLevelEntries(words, index),
     ).flat().map((word) => word.id));
-    expect(bossEntries.slice(0, WORDS_PER_LEVEL).map((word) => word.id))
-      .toEqual(currentLevelIds);
-    expect(bossEntries).toHaveLength(WORDS_PER_LEVEL * BOSS_LEVEL_INTERVAL);
-    expect(bossEntries.slice(WORDS_PER_LEVEL).every((word) => priorIds.has(word.id))).toBe(true);
-    expect(bossEntries.slice(WORDS_PER_LEVEL).some((word) => weakestIds.includes(word.id))).toBe(true);
+    expect(bossEntries).toHaveLength(WORDS_PER_LEVEL * NORMAL_LEVELS_PER_BOSS);
+    expect(bossEntries.every((word) => priorIds.has(word.id))).toBe(true);
+    expect(bossEntries.slice(0, 10).every((word) => weakestIds.has(word.id))).toBe(true);
   });
 
   it('keeps below-level basics as common anchors instead of creating a simple tail', () => {

@@ -11,6 +11,7 @@ export type GameMode =
   | 'sentence'
   | 'boss'
   | 'match-meaning'
+  | 'listen-meaning'
   | 'match-word'
   | 'listen-word';
 

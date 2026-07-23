@@ -22,10 +22,6 @@ const ARTWORK_BY_ENEMY: Record<CombatEnemyKind, readonly string[]> = {
   boss: [bossPhaseOne, bossPhaseTwo, bossPhaseThree, bossDefeated],
 };
 
-function percentage(value: number, maximum: number): number {
-  return maximum > 0 ? Math.round((value / maximum) * 100) : 0;
-}
-
 export function getMonsterArtworkSources(enemyKind: CombatEnemyKind): readonly string[] {
   return ARTWORK_BY_ENEMY[enemyKind];
 }
@@ -66,11 +62,13 @@ export function resolveMonsterArtwork(
         visualState: pose === 'recovering' ? 'is-recovering' : 'is-hurt',
       };
     }
-    const healthPercentage = percentage(state.enemyHealth, state.maxEnemyHealth);
-    if (healthPercentage <= 33) {
+    const healthRatio = state.maxEnemyHealth > 0
+      ? state.enemyHealth / state.maxEnemyHealth
+      : 0;
+    if (healthRatio <= 1 / 3) {
       return { src: bossPhaseThree, alt: '进入狂暴阶段的词怪领主', visualState: 'is-enraged' };
     }
-    if (healthPercentage <= 66) {
+    if (healthRatio <= 2 / 3) {
       return { src: bossPhaseTwo, alt: '受创失衡的词怪领主', visualState: 'is-wounded' };
     }
     return { src: bossPhaseOne, alt: '词怪领主', visualState: 'is-idle' };

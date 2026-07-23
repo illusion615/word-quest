@@ -16,6 +16,7 @@ interface MatchMeaningQuestionProps {
   isSpeechSupported: boolean;
   isSpeaking: boolean;
   onSpeak: (text: string) => void;
+  onOpenSettings?: () => void;
   onSubmit: (
     correct: boolean,
     response: string,
@@ -28,6 +29,9 @@ interface MatchMeaningQuestionProps {
   preferSimilarDistractors?: boolean;
   reviewed?: boolean;
   wordProgress?: WordProgress;
+  audioOnly?: boolean;
+  speechError?: string;
+  voiceName?: string;
 }
 
 /**
@@ -40,6 +44,7 @@ export function MatchMeaningQuestion({
   isSpeechSupported,
   isSpeaking,
   onSpeak,
+  onOpenSettings,
   onSubmit,
   onDraftChange,
   hideAnswerCount = false,
@@ -47,6 +52,9 @@ export function MatchMeaningQuestion({
   preferSimilarDistractors = false,
   reviewed = false,
   wordProgress,
+  audioOnly = false,
+  speechError = '',
+  voiceName = '自动选择',
 }: MatchMeaningQuestionProps) {
   const options = useMemo(() => buildMeaningOptions(word, entries, {
     extraOptionCount,
@@ -101,32 +109,63 @@ export function MatchMeaningQuestion({
 
   return (
     <div className="question-layout">
-      <div className="word-prompt-row">
-        <div className="word-prompt">
-          <strong>{word.word}</strong>
-          <span className="word-phonetic">
+      {audioOnly ? (
+        <>
+          <div className="audio-prompt-row">
             <button
               type="button"
-              className="word-audio"
+              className="sound-button"
               onClick={() => onSpeak(word.word)}
               disabled={!isSpeechSupported || isSpeaking}
-              aria-label="播放单词发音"
+              aria-label={isSpeaking ? '正在播放发音' : '播放单词发音'}
             >
               <Volume2 aria-hidden="true" />
             </button>
-            {word.phonetic}{word.partOfSpeech ? ` · ${word.partOfSpeech}` : ''}
-          </span>
+            <p className="question-kicker">听发音，选出正确释义</p>
+          </div>
+          {onOpenSettings && (
+            <button type="button" className="voice-settings-button" onClick={onOpenSettings}>
+              音色 · {voiceName}
+            </button>
+          )}
+          {speechError && <p className="speech-error" role="alert">{speechError}</p>}
+          {reviewed && (
+            <div className="word-prompt">
+              <strong>{word.word}</strong>
+              <span>{word.phonetic}{word.partOfSpeech ? ` · ${word.partOfSpeech}` : ''}</span>
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="word-prompt-row">
+          <div className="word-prompt">
+            <strong>{word.word}</strong>
+            <span className="word-phonetic">
+              <button
+                type="button"
+                className="word-audio"
+                onClick={() => onSpeak(word.word)}
+                disabled={!isSpeechSupported || isSpeaking}
+                aria-label="播放单词发音"
+              >
+                <Volume2 aria-hidden="true" />
+              </button>
+              {word.phonetic}{word.partOfSpeech ? ` · ${word.partOfSpeech}` : ''}
+            </span>
+          </div>
+          {wordProgress && (
+            <dl className="answer-stats-inline" aria-label="本词学习进度">
+              <div><dt>练习</dt><dd>{wordProgress.attempts}</dd></div>
+              <div><dt>答对</dt><dd>{wordProgress.correct}</dd></div>
+              <div><dt>正确率</dt><dd>{wordProgress.mastery}%</dd></div>
+            </dl>
+          )}
         </div>
-        {wordProgress && (
-          <dl className="answer-stats-inline" aria-label="本词学习进度">
-            <div><dt>练习</dt><dd>{wordProgress.attempts}</dd></div>
-            <div><dt>答对</dt><dd>{wordProgress.correct}</dd></div>
-            <div><dt>正确率</dt><dd>{wordProgress.mastery}%</dd></div>
-          </dl>
-        )}
-      </div>
+      )}
       <p className="question-kicker">
-        {hideAnswerCount ? '选出全部正确释义' : `选出全部正确释义（共 ${correctCount} 项）`}
+        {hideAnswerCount
+          ? '选出全部正确释义'
+          : `选出全部正确释义（共 ${correctCount} 项）`}
       </p>
       <div
         className="choice-grid"

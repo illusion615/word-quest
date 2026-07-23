@@ -1,4 +1,4 @@
-import type { WordEntry } from './models';
+import type { LearningStage, WordEntry, WordProgress } from './models';
 import { computeWordDifficulty, rarityFromRank, type MonsterTier } from './wordDifficulty';
 
 /**
@@ -13,11 +13,20 @@ export interface WaveMonster {
   phonetic: string;
   definitionZh: string;
   tier: MonsterTier;
+  difficultyScore: number;
+  rarity: number;
+  lengthScore: number;
+  learningStage: LearningStage;
+  attempts: number;
+  mistakes: number;
+  mastery: number;
   status: MonsterStatus;
 }
 
 export interface WaveMonsterInput {
   word: WordEntry;
+  stage: LearningStage;
+  progress?: WordProgress;
   status: MonsterStatus;
 }
 
@@ -43,12 +52,24 @@ export function buildWaveMonsters(
   inputs: readonly WaveMonsterInput[],
   rarityIndex: Map<string, number>,
 ): WaveMonster[] {
-  return inputs.map(({ word, status }) => ({
-    wordId: word.id,
-    word: word.word,
-    phonetic: word.phonetic,
-    definitionZh: word.definitionZh,
-    tier: monsterTier(word, rarityIndex),
-    status,
-  }));
+  return inputs.map(({ word, stage, progress, status }) => {
+    const difficulty = computeWordDifficulty(word, rarityIndex.get(word.id) ?? 0);
+    const attempts = progress?.attempts ?? 0;
+    const correct = progress?.correct ?? 0;
+    return {
+      wordId: word.id,
+      word: word.word,
+      phonetic: word.phonetic,
+      definitionZh: word.definitionZh,
+      tier: difficulty.tier,
+      difficultyScore: difficulty.score,
+      rarity: difficulty.rarity,
+      lengthScore: difficulty.lengthScore,
+      learningStage: stage,
+      attempts,
+      mistakes: Math.max(0, attempts - correct),
+      mastery: progress?.mastery ?? 0,
+      status,
+    };
+  });
 }

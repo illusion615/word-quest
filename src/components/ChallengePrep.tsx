@@ -7,7 +7,6 @@ import {
   Hash,
   Layers3,
   ListChecks,
-  Shield,
   Zap,
 } from '../icons';
 import {
@@ -17,9 +16,17 @@ import {
   type BoostDef,
   type BoostId,
 } from '../domain/challengeBoosts';
+import {
+  BOSS_QUESTION_COUNT,
+  BOSS_STAGE_SIZE,
+  BOSS_STAGES,
+  bossPassingScore,
+} from '../domain/boss';
+import type { JourneyLevelKind } from '../domain/journey';
 
 interface ChallengePrepProps {
   levelNumber: number;
+  levelKind: JourneyLevelKind;
   activeBoosts: ActiveBoosts;
   offers: BoostDef[];
   droppedBoostName: string | null;
@@ -35,11 +42,11 @@ const BOOST_ICONS: Record<BoostId, typeof Zap> = {
   hiddenPassage: BookOpenCheck,
   similarDistractors: Layers3,
   extraOptions: ListChecks,
-  thinShield: Shield,
 };
 
 export function ChallengePrep({
   levelNumber,
+  levelKind,
   activeBoosts,
   offers,
   droppedBoostName,
@@ -56,9 +63,17 @@ export function ChallengePrep({
         <span>退出</span>
       </button>
       <section className="skill-draft-panel" aria-labelledby="challenge-prep-heading">
-        <p className="eyebrow">第 {levelNumber} 关 · 战前整备</p>
+        <p className="eyebrow">第 {levelNumber} 关 · {levelKind === 'boss' ? 'Boss 决战' : '战前整备'}</p>
         <h1 id="challenge-prep-heading">不够卷，再强一点</h1>
         <p>每关叠加一个难度加成，让挑战更硬核；答错任意题会随机失去一个加成。加成只改变难度，不影响答题判定与 FSRS 复习计划。</p>
+
+        {levelKind === 'boss' && (
+          <div className="boss-assessment-brief" aria-label="Boss 考核规则">
+            <strong>固定 {BOSS_QUESTION_COUNT} 题 · 一场结束</strong>
+            <span>{BOSS_STAGES.map((stage) => `${stage.name} ${BOSS_STAGE_SIZE} 题`).join(' · ')}</span>
+            <small>复核前序已学词，不引入新词；答满全场，至少答对 {bossPassingScore()} 题才通过。</small>
+          </div>
+        )}
 
         {droppedBoostName && (
           <p className="boost-penalty" role="status">

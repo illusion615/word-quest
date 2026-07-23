@@ -31,7 +31,6 @@ const snapshot: AchievementSnapshot = {
     hiddenPassage: 1,
     similarDistractors: 1,
     extraOptions: 2,
-    thinShield: 2,
   },
 };
 

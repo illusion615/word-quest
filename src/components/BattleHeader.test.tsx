@@ -18,7 +18,7 @@ describe('BattleHeader', () => {
     expect(html).toContain('退出本轮');
     expect(html).toContain('第 3 关');
     expect(html).toContain('释义选择 · 建立识别');
-    expect(html).toContain('卷王护盾');
+    expect(html).not.toContain('卷王护盾');
     expect(html).toContain('稳扎');
     expect(html.indexOf('退出本轮')).toBeLessThan(html.indexOf('第 3 关'));
   });

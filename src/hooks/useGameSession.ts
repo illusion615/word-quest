@@ -9,19 +9,21 @@ import type {
 } from '../domain/models';
 import {
   AUTO_ADVANCE_DELAY_MS,
-  MODE_TIME_LIMITS,
   advanceSession,
   answerCurrentQuestion,
   completeSessionEarly,
   createGameSession,
   replaceUnavailableListening,
+  resolveModeTimeLimit,
   shouldPauseAfterAnswer,
   startChainGroup,
   type ResolvedAnswerEvent,
 } from '../domain/session';
 
 function correctAnswerFor(mode: GameMode, word: WordEntry): string {
-  return mode === 'choice' || mode === 'match-meaning' ? word.definitionZh : word.word;
+  return mode === 'choice' || mode === 'match-meaning' || mode === 'listen-meaning'
+    ? word.definitionZh
+    : word.word;
 }
 
 export function useGameSession(
@@ -47,7 +49,10 @@ export function useGameSession(
         return { ...item, mode: 'boss', stage: 'recall' };
       }
       if (!speechPlaybackAvailable && item.mode === 'listening') {
-        return { ...item, mode: 'choice' };
+        return { ...item, mode: 'boss' };
+      }
+      if (!speechPlaybackAvailable && item.mode === 'listen-meaning') {
+        return { ...item, mode: 'match-meaning' };
       }
       if (!speechPlaybackAvailable && item.mode === 'listen-word') {
         return { ...item, mode: 'match-word' };
@@ -104,19 +109,20 @@ export function useGameSession(
 
     const answeredAt = Date.now();
     const responseTimeMs = Math.max(0, answeredAt - session.questionStartedAt);
+    const timeLimitMs = resolveModeTimeLimit(mode, timeScale);
     onRecord({
       wordId: word.id,
       mode,
       correct,
       answeredAt: new Date(answeredAt).toISOString(),
       responseTimeMs,
-      timeLimitMs: MODE_TIME_LIMITS[mode],
+      timeLimitMs,
       usedHint: false,
     });
     onAnswerResolved?.({
       correct,
       responseTimeMs,
-      timeLimitMs: MODE_TIME_LIMITS[mode],
+      timeLimitMs,
       mode,
     });
     setSession(answerCurrentQuestion(session, {
@@ -127,7 +133,7 @@ export function useGameSession(
     }));
     setAutoAdvanceRemainingMs(AUTO_ADVANCE_DELAY_MS);
     setAutoAdvancePaused(shouldPauseAfterAnswer(correct));
-  }, [applyRuntimeOverrides, onAnswerResolved, onRecord, session]);
+  }, [applyRuntimeOverrides, onAnswerResolved, onRecord, session, timeScale]);
 
   const nextQuestion = useCallback(() => {
     onAdvance();

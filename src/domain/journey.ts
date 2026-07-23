@@ -11,6 +11,7 @@ import { getStudyAvailability } from './learningSchedule';
 export const WORDS_PER_LEVEL = 25;
 export const TARGET_LEVELS_PER_CHAPTER = 20;
 export const BOSS_LEVEL_INTERVAL = 5;
+export const NORMAL_LEVELS_PER_BOSS = BOSS_LEVEL_INTERVAL - 1;
 // The average weight of every band across the whole journey is 25%, so all
 // words are consumed exactly once. Early levels lean common; late levels lean
 // rare, while every full level still contains words from all four bands.
@@ -59,6 +60,44 @@ export interface BankJourney {
   totalLevels: number;
   activeLevelIndex: number | null;
   activeChapterIndex: number;
+}
+
+interface JourneyNodeSpec {
+  kind: JourneyLevelKind;
+  normalGroupIndex: number | null;
+  reviewGroupStart: number;
+  reviewGroupEnd: number;
+}
+
+/**
+ * Inserts a finite Boss assessment after each four normal word groups. Boss
+ * nodes review the preceding groups and never consume a 25-word block of their
+ * own; a final partial group still ends with a Boss assessment.
+ */
+export function buildJourneyNodeSpecs(entryCount: number): JourneyNodeSpec[] {
+  const normalLevelCount = Math.ceil(Math.max(0, entryCount) / WORDS_PER_LEVEL);
+  const nodes: JourneyNodeSpec[] = [];
+  for (let normalGroupIndex = 0; normalGroupIndex < normalLevelCount; normalGroupIndex += 1) {
+    const reviewGroupStart = Math.floor(normalGroupIndex / NORMAL_LEVELS_PER_BOSS)
+      * NORMAL_LEVELS_PER_BOSS;
+    nodes.push({
+      kind: 'normal',
+      normalGroupIndex,
+      reviewGroupStart,
+      reviewGroupEnd: normalGroupIndex + 1,
+    });
+    const closesFullGroup = (normalGroupIndex + 1) % NORMAL_LEVELS_PER_BOSS === 0;
+    const closesJourney = normalGroupIndex + 1 === normalLevelCount;
+    if (closesFullGroup || closesJourney) {
+      nodes.push({
+        kind: 'boss',
+        normalGroupIndex: null,
+        reviewGroupStart,
+        reviewGroupEnd: normalGroupIndex + 1,
+      });
+    }
+  }
+  return nodes;
 }
 
 export function resolveLevelCompletionAction(
@@ -187,18 +226,16 @@ function attemptsScore(word: WordEntry, state: LearningState): number {
   return progress.attempts;
 }
 
-export function isBossLevelNumber(levelNumber: number): boolean {
-  return levelNumber > 0 && levelNumber % BOSS_LEVEL_INTERVAL === 0;
-}
-
 export function getJourneyLevelEntries(
   entries: WordEntry[],
   levelIndex: number,
   bankId?: BankId,
 ): WordEntry[] {
   const safeIndex = Math.max(0, Math.floor(levelIndex));
-  const start = safeIndex * WORDS_PER_LEVEL;
   const orderedEntries = orderedByBankLevel(entries, bankId);
+  const node = buildJourneyNodeSpecs(orderedEntries.length)[safeIndex];
+  if (!node || node.kind !== 'normal' || node.normalGroupIndex === null) return [];
+  const start = node.normalGroupIndex * WORDS_PER_LEVEL;
   return orderedEntries.slice(start, start + WORDS_PER_LEVEL);
 }
 
@@ -210,14 +247,13 @@ export function getBossLevelEntries(
 ): WordEntry[] {
   const safeIndex = Math.max(0, Math.floor(levelIndex));
   const orderedEntries = orderedByBankLevel(entries, bankId);
-  const currentStart = safeIndex * WORDS_PER_LEVEL;
-  const currentLevelEntries = orderedEntries.slice(currentStart, currentStart + WORDS_PER_LEVEL);
-  const reviewWindowStart = Math.max(
-    0,
-    currentStart - ((BOSS_LEVEL_INTERVAL - 1) * WORDS_PER_LEVEL),
+  const node = buildJourneyNodeSpecs(orderedEntries.length)[safeIndex];
+  if (!node || node.kind !== 'boss') return [];
+  const reviewCandidates = orderedEntries.slice(
+    node.reviewGroupStart * WORDS_PER_LEVEL,
+    node.reviewGroupEnd * WORDS_PER_LEVEL,
   );
-  const reviewCandidates = orderedEntries.slice(reviewWindowStart, currentStart);
-  const weakestReviews = [...reviewCandidates]
+  return [...reviewCandidates]
     .sort((left, right) => {
       const masteryDelta = masteryScore(left, state) - masteryScore(right, state);
       if (masteryDelta !== 0) return masteryDelta;
@@ -225,8 +261,6 @@ export function getBossLevelEntries(
       if (attemptsDelta !== 0) return attemptsDelta;
       return left.word.localeCompare(right.word);
     });
-
-  return [...currentLevelEntries, ...weakestReviews];
 }
 
 export function buildBankJourney(
@@ -241,24 +275,33 @@ export function buildBankJourney(
   }
 
   const orderedEntries = orderedByBankLevel(entries, bankId);
-  const totalLevels = Math.ceil(orderedEntries.length / WORDS_PER_LEVEL);
+  const normalLevelCount = Math.ceil(orderedEntries.length / WORDS_PER_LEVEL);
+  const nodeSpecs = buildJourneyNodeSpecs(orderedEntries.length);
+  const totalLevels = nodeSpecs.length;
   const chapterSizes = levelsPerChapter(totalLevels);
-  const rawLevels = Array.from({ length: totalLevels }, (_, globalIndex) => {
-    const start = globalIndex * WORDS_PER_LEVEL;
-    const words = orderedEntries.slice(start, start + WORDS_PER_LEVEL);
+  const rawLevels = nodeSpecs.map((node, globalIndex) => {
+    const start = (node.normalGroupIndex ?? node.reviewGroupStart) * WORDS_PER_LEVEL;
+    const end = node.kind === 'normal'
+      ? start + WORDS_PER_LEVEL
+      : node.reviewGroupEnd * WORDS_PER_LEVEL;
+    const words = orderedEntries.slice(start, end);
     const availability = getStudyAvailability(words, state, now);
     const masteredCount = availability.stableCount;
-    const progressPercentage = roundPercentage((masteredCount / words.length) * 100);
     const levelNumber = globalIndex + 1;
+    const completed = clearedLevels.has(levelNumber);
+    const progressPercentage = node.kind === 'boss'
+      ? (completed ? 100 : 0)
+      : roundPercentage((masteredCount / words.length) * 100);
     return {
       globalIndex,
+      node,
       words,
       masteredCount,
       dueCount: availability.dueCount,
-      newCount: availability.newCount,
+      newCount: node.kind === 'boss' ? 0 : availability.newCount,
       nextReviewAt: availability.nextReviewAt?.toISOString() ?? null,
       progressPercentage,
-      completed: clearedLevels.has(levelNumber),
+      completed,
     };
   });
   const activeLevelIndex = rawLevels.find((level) => !level.completed)?.globalIndex ?? null;
@@ -267,8 +310,10 @@ export function buildBankJourney(
   const chapters = chapterSizes.map((chapterSize, chapterIndex) => {
     const chapterRawLevels = rawLevels.slice(globalOffset, globalOffset + chapterSize);
     const levels = chapterRawLevels.map((level, chapterLevelIndex): JourneyLevel => {
-      const wordStart = level.globalIndex * WORDS_PER_LEVEL;
-      const wordEnd = wordStart + level.words.length;
+      const wordStart = (level.node.normalGroupIndex ?? level.node.reviewGroupStart) * WORDS_PER_LEVEL;
+      const wordEnd = level.node.kind === 'normal'
+        ? wordStart + level.words.length
+        : level.node.reviewGroupEnd * WORDS_PER_LEVEL;
       const status: JourneyLevelStatus = level.completed && (
         activeLevelIndex === null || level.globalIndex < activeLevelIndex
       )
@@ -280,7 +325,7 @@ export function buildBankJourney(
         id: `level-${level.globalIndex + 1}`,
         globalIndex: level.globalIndex,
         number: level.globalIndex + 1,
-        kind: isBossLevelNumber(level.globalIndex + 1) ? 'boss' : 'normal',
+        kind: level.node.kind,
         chapterIndex,
         chapterLevelNumber: chapterLevelIndex + 1,
         wordStart,
@@ -291,14 +336,19 @@ export function buildBankJourney(
         newCount: level.newCount,
         nextReviewAt: level.nextReviewAt,
         progressPercentage: level.progressPercentage,
-        perfect: level.masteredCount === level.words.length,
+        perfect: level.node.kind === 'normal' && level.masteredCount === level.words.length,
         status,
-        frequencyLabel: levelFrequencyLabel(level.globalIndex, totalLevels),
+        frequencyLabel: level.node.kind === 'boss'
+          ? `前 ${level.node.reviewGroupEnd - level.node.reviewGroupStart} 关综合考核`
+          : levelFrequencyLabel(level.node.normalGroupIndex ?? 0, normalLevelCount),
       };
     });
-    const chapterWords = chapterRawLevels.flatMap((level) => level.words);
-    const masteredWords = chapterRawLevels.reduce((sum, level) => sum + level.masteredCount, 0);
-    const progressPercentage = roundPercentage((masteredWords / chapterWords.length) * 100);
+    const normalLevels = chapterRawLevels.filter((level) => level.node.kind === 'normal');
+    const chapterWords = normalLevels.flatMap((level) => level.words);
+    const masteredWords = normalLevels.reduce((sum, level) => sum + level.masteredCount, 0);
+    const progressPercentage = chapterWords.length > 0
+      ? roundPercentage((masteredWords / chapterWords.length) * 100)
+      : 0;
     const status: JourneyLevelStatus = levels.every((level) => level.status === 'completed')
       ? 'completed'
       : levels.some((level) => level.status === 'active')

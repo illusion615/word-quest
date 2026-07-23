@@ -6,6 +6,7 @@ import {
 } from 'react';
 import {
   ArrowRight,
+  BookOpenCheck,
   Layers3,
   LoaderCircle,
   Pause,
@@ -17,6 +18,8 @@ import type {
   WordEntry,
   WordSenseExample,
 } from '../domain/models';
+import { parseDefinitionSenses } from '../domain/wordText';
+import { SenseList } from './WordDefinitions';
 
 const MarkdownContent = lazy(() => import('./MarkdownContent'));
 
@@ -39,6 +42,28 @@ interface InlineQuestionReviewProps {
   onAskAi: (word: WordEntry, pauseReview?: boolean) => void;
   relatedBankNames: string[];
   wordMastered: boolean;
+}
+
+interface AiCoachSenseExamplesProps {
+  word: WordEntry;
+  examples: WordSenseExample[];
+}
+
+export function AiCoachSenseExamples({ word, examples }: AiCoachSenseExamplesProps) {
+  const senses = parseDefinitionSenses(word.definitionZh);
+  if (senses.length === 0 || examples.length === 0) return null;
+
+  return (
+    <section className="inline-ai-sense-examples" aria-labelledby="inline-ai-examples-heading">
+      <div className="inline-ai-examples-heading">
+        <h4 id="inline-ai-examples-heading">
+          <BookOpenCheck aria-hidden="true" /> 逐义例句
+        </h4>
+        <span>{senses.length} 个义项</span>
+      </div>
+      <SenseList senses={senses} language="zh" examples={examples} />
+    </section>
+  );
 }
 
 export function InlineQuestionReview({
@@ -131,9 +156,12 @@ export function InlineQuestionReview({
           </div>
           <div className="answer-ai-body">
             {currentAi?.status === 'success' && (
-              <Suspense fallback={<p className="markdown-loading">正在排版讲解…</p>}>
-                <MarkdownContent content={currentAi.text} />
-              </Suspense>
+              <>
+                <Suspense fallback={<p className="markdown-loading">正在排版讲解…</p>}>
+                  <MarkdownContent content={currentAi.text} />
+                </Suspense>
+                <AiCoachSenseExamples word={word} examples={currentAi.senseExamples} />
+              </>
             )}
             {currentAi?.status === 'error' && (
               <p className="answer-ai-hint is-error" aria-live="polite">{currentAi.text}</p>

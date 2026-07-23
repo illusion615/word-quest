@@ -116,6 +116,28 @@ describe('buildWordOptions', () => {
     expect(distractorIds).not.toContain('ocean');
   });
 
+  it('prioritizes similar phonetics for listening word choices', () => {
+    const target = { ...makeWord('ship', 'n. 船'), phonetic: '/ʃɪp/' };
+    const candidates = [
+      target,
+      { ...makeWord('sheep', 'n. 羊'), phonetic: '/ʃiːp/' },
+      { ...makeWord('shop', 'n. 商店'), phonetic: '/ʃɒp/' },
+      { ...makeWord('table', 'n. 桌子'), phonetic: '/ˈteɪbəl/' },
+      { ...makeWord('universe', 'n. 宇宙'), phonetic: '/ˈjuːnɪvɜːs/' },
+    ];
+    const options = buildWordOptions(target, candidates, {
+      optionCount: 3,
+      preferSimilarPronunciations: true,
+      random: stableRandom,
+    });
+    const distractorIds = options
+      .filter((option) => !option.correct)
+      .map((option) => option.id);
+
+    expect(distractorIds).toEqual(expect.arrayContaining(['sheep', 'shop']));
+    expect(distractorIds).not.toContain('table');
+  });
+
   it('adds one word choice per extra-option stack', () => {
     const target = makeWord('river', 'n. 河流');
     const options = buildWordOptions(target, pool, {

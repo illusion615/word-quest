@@ -259,14 +259,20 @@ export function parseWordExplanation(
       senseIndex,
     })),
   ];
-  const exampleKeys = new Set(examples.map((example) => (
+  const expectedKeys = new Set(expected.map(({ language, senseIndex }) => (
+    `${language}:${senseIndex}`
+  )));
+  const relevantExamples = examples.filter((example) => (
+    expectedKeys.has(`${example.language}:${example.senseIndex}`)
+  ));
+  const relevantKeys = new Set(relevantExamples.map((example) => (
     `${example.language}:${example.senseIndex}`
   )));
-  if (examples.length > expected.length || exampleKeys.size !== examples.length) {
+  if (relevantKeys.size !== relevantExamples.length) {
     throw new Error('AI 返回的义项例句数量不正确。');
   }
   const senseExamples: WordSenseExample[] = expected.map(({ language, senseIndex }) => {
-    const match = examples.find((example) => (
+    const match = relevantExamples.find((example) => (
       example.language === language
       && example.senseIndex === senseIndex
     ));
@@ -572,16 +578,19 @@ export async function explainWord(
   const englishSenses = parseDefinitionSenses(word.definition);
   const systemPrompt = [
     'You are an expert English vocabulary coach helping a learner truly understand one word so they can recall it and use it correctly.',
-    'Use only the supplied dictionary entry as factual context; never invent extra senses, and do not state an etymology unless you are confident it is accurate.',
+    'Treat the supplied dictionary entry as the authoritative list of senses. Use reliable general language knowledge to explain how those senses work, but never invent an additional sense or an uncertain etymology.',
     'Return one JSON object matching the supplied schema.',
     'coachMarkdown must be concise GitHub-flavored Markdown with exactly three level-3 (###) sections, in this order:',
     '(1) a memory hook — a vivid mnemonic, a word-root/affix breakdown, or a mental image that makes the word stick;',
-    '(2) usage notes — the 2-3 most common collocations or patterns, plus one short contrast with an easily confused word or a distinction between its senses;',
-    '(3) usage summary — a compact summary of how the senses differ; do not repeat the per-sense examples here.',
+    '(2) a sense map and usage notes — explain EVERY supplied Chinese sense in plain language, preserving its part-of-speech label and clearly distinguishing the senses; include the most useful collocations or patterns;',
+    '(3) a usage summary — contrast the senses and one easily confused word or construction, then state the most important caution.',
+    'If a sense is a grammar or technical term, explain what it means, its standard form or pattern, when it is used, and one common mistake or limitation. Do not merely restate the dictionary label.',
+    'If the target changes pronunciation or stress across the supplied parts of speech, explicitly note the difference when you are confident it is standard.',
     'senseExamples must contain exactly one item for every supplied Chinese sense and every supplied English sense.',
-    'Match each item by its language and zero-based senseIndex. The English sentence must naturally demonstrate that exact sense and use the target word (an inflected form is allowed).',
+    'Match each item by its language and zero-based senseIndex. Each English sentence must naturally demonstrate that exact sense in the exact part of speech and use the target word (an inflected form is allowed).',
+    'For a grammar or technical-term sense, write a teaching example that makes the concept understandable in context rather than merely naming the term.',
     'Each translation must faithfully translate that sentence into the requested output language.',
-    'Localize the three Markdown section headings into the output language. Keep coachMarkdown under 150 words, use bold sparingly, and never output raw HTML or Markdown tables.',
+    'Localize the three Markdown section headings into the output language. Keep coachMarkdown under 240 words, use bold sparingly, and never output raw HTML or Markdown tables.',
     `Respond in ${outputLanguage}.`,
   ].join(' ');
 
@@ -597,7 +606,7 @@ export async function explainWord(
     },
   ], fetch, {
     temperature: 0.35,
-    maxTokens: 1600,
+    maxTokens: 2200,
     responseFormat: wordExplanationResponseFormat(),
   });
   return parseWordExplanation(content, chineseSenses.length, englishSenses.length);

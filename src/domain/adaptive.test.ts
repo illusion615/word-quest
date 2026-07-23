@@ -13,6 +13,8 @@ import {
   CHAIN_OFFLINE_SIZE,
   CHAIN_POOL_SIZE,
   CHAIN_SEED_SIZE,
+  CLEARANCE_REVIEW_SIZE,
+  buildClearanceReview,
   buildChainBlueprints,
   buildOfflineChain,
   getAdaptiveStage,
@@ -59,13 +61,24 @@ describe('adaptive study plan', () => {
   it('evolves the exercise with mastery', () => {
     expect(getAdaptiveStage(undefined)).toMatchObject({ stage: 'new', mode: 'match-meaning' });
     expect(getAdaptiveStage(progress(1, 100, { state: State.Learning })))
-      .toMatchObject({ stage: 'sound', mode: 'match-meaning' });
+      .toMatchObject({ stage: 'sound', mode: 'listen-meaning' });
     expect(getAdaptiveStage(progress(2, 100, { state: State.Review, stability: 3 })))
       .toMatchObject({ stage: 'context', mode: 'match-word' });
     expect(getAdaptiveStage(progress(3, 50, {
       state: State.Review,
       stability: ACTIVE_RECALL_STABILITY_DAYS,
     }))).toMatchObject({ stage: 'recall', mode: 'listen-word' });
+  });
+
+  it('rotates exercise form within each learning stage', () => {
+    expect(getAdaptiveStage(progress(2, 100, { state: State.Learning })))
+      .toMatchObject({ stage: 'sound', mode: 'match-meaning' });
+    expect(getAdaptiveStage(progress(3, 100, { state: State.Review, stability: 3 })))
+      .toMatchObject({ stage: 'context', mode: 'sentence' });
+    expect(getAdaptiveStage(progress(4, 100, {
+      state: State.Review,
+      stability: ACTIVE_RECALL_STABILITY_DAYS,
+    }))).toMatchObject({ stage: 'recall', mode: 'listening' });
   });
 
   it('keeps weak words in sound training', () => {
@@ -86,7 +99,7 @@ describe('adaptive study plan', () => {
     expect(getAdaptiveStage(progress(2, 50, {
       state: State.Review,
       stability: ACTIVE_RECALL_STABILITY_DAYS,
-    }))).toMatchObject({ stage: 'recall', mode: 'listen-word' });
+    }))).toMatchObject({ stage: 'recall', mode: 'listening' });
   });
 
   it('caps fresh sessions instead of filling multiple chains with every unseen word', () => {
@@ -121,6 +134,24 @@ describe('adaptive study plan', () => {
     expect(blueprints).toHaveLength(1);
     expect(blueprints[0].seeds).toHaveLength(CHAIN_SEED_SIZE);
     expect(state.progress[blueprints[0].seeds[0].id]?.card.due).toContain('2026-07-18');
+  });
+
+  it('builds a finite weak-word retry when a fully introduced level still needs a win', () => {
+    const entries = makeEntries(25);
+    const state: LearningState = {
+      version: 1,
+      progress: Object.fromEntries(entries.map((word, index) => [word.id, {
+        ...progress(3, index < 4 ? 33 : 100, { stability: index < 4 ? 1 : 5 }),
+        wordId: word.id,
+      }])),
+      history: [],
+    };
+    const review = buildClearanceReview(entries, state);
+
+    expect(review).toHaveLength(CLEARANCE_REVIEW_SIZE);
+    expect(review.slice(0, 4).map((item) => item.word.id))
+      .toEqual(entries.slice(0, 4).map((word) => word.id));
+    expect(review.every((item) => item.chainRationale.label === '通关复核')).toBe(true);
   });
 
   it('materializes AI-used words into quiz items that share one passage', () => {

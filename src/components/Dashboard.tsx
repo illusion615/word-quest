@@ -14,6 +14,7 @@ import {
   Star,
 } from '../icons';
 import type { BankCoverageMap } from '../domain/coverage';
+import { BOSS_QUESTION_COUNT, bossPassingScore } from '../domain/boss';
 import {
   getClearedLevelNumberSet,
   levelResultKey,
@@ -183,7 +184,7 @@ export function Dashboard({
                 </div>
                 <p>
                   {level.kind === 'boss'
-                    ? `${level.newCount} 新词 · ${level.dueCount} 到期；并复核前序薄弱词。`
+                    ? `固定 ${BOSS_QUESTION_COUNT} 题 · 三阶段答满；至少答对 ${bossPassingScore()} 题通过。`
                     : `${level.masteredCount} 稳定掌握 · ${level.dueCount} 到期 · ${level.newCount} 新词`}
                 </p>
                 {level.kind === 'boss' && (
@@ -194,7 +195,9 @@ export function Dashboard({
                 <div
                   className="journey-progress"
                   role="progressbar"
-                  aria-label={`第 ${level.number} 关稳定掌握度`}
+                  aria-label={level.kind === 'boss'
+                    ? `第 ${level.number} 关 Boss 通关进度`
+                    : `第 ${level.number} 关稳定掌握度`}
                   aria-valuemin={0}
                   aria-valuemax={100}
                   aria-valuenow={level.progressPercentage}
@@ -202,15 +205,19 @@ export function Dashboard({
                   <span style={{ width: `${level.progressPercentage}%` }} />
                 </div>
                 <div className="journey-level-footer">
-                  <strong>{level.progressPercentage}%</strong>
+                  <strong>{level.kind === 'boss' ? `${BOSS_QUESTION_COUNT} 题` : `${level.progressPercentage}%`}</strong>
                   {level.status === 'completed' && (
                     <button
                       type="button"
                       className="secondary-button journey-action"
                       onClick={() => onStartLevel(level.globalIndex)}
-                      disabled={bankLoading || sessionPreparing || (level.dueCount === 0 && level.newCount === 0)}
+                      disabled={bankLoading || sessionPreparing || (
+                        level.kind !== 'boss' && level.dueCount === 0 && level.newCount === 0
+                      )}
                     >
-                      {level.dueCount > 0
+                      {level.kind === 'boss'
+                        ? `再次挑战 ${BOSS_QUESTION_COUNT} 题`
+                        : level.dueCount > 0
                         ? `复习 ${level.dueCount} 词`
                         : level.newCount > 0
                           ? newWordBatchLabel(level.newCount)
@@ -231,15 +238,16 @@ export function Dashboard({
                         disabled={
                           bankLoading
                           || sessionPreparing
-                          || (level.dueCount === 0 && level.newCount === 0)
                         }
                       >
                         {sessionPreparing ? (
                           <><LoaderCircle className="spin-icon" aria-hidden="true" /> 构建战场中</>
                         ) : bankLoading ? (
                           <><LoaderCircle className="spin-icon" aria-hidden="true" /> 加载词库中</>
+                        ) : level.kind === 'boss' ? (
+                          <>开始 {BOSS_QUESTION_COUNT} 题决战 <ArrowRight aria-hidden="true" /></>
                         ) : level.dueCount === 0 && level.newCount === 0 ? (
-                          <>下次 {nextReviewLabel(level.nextReviewAt)}</>
+                          <>重新挑战通关 <ArrowRight aria-hidden="true" /></>
                         ) : level.dueCount > 0 ? (
                           <>复习 {level.dueCount} 词 <ArrowRight aria-hidden="true" /></>
                         ) : (

@@ -26,14 +26,13 @@ describe('combat engine', () => {
 
     expect(state.phase).toBe('ready');
     expect(state.maxEnemyHealth).toBe(10);
-    expect(state.playerShield).toBe(3);
+    expect(state.requiredCorrectAnswers).toBe(0);
   });
 
-  it('starts with a reduced custom shield budget', () => {
-    const state = createCombatState(10, { playerShield: 1 });
+  it('caps the required correct answers to the question count', () => {
+    const state = createCombatState(10, { requiredCorrectAnswers: 20 });
 
-    expect(state.playerShield).toBe(1);
-    expect(state.maxPlayerShield).toBe(1);
+    expect(state.requiredCorrectAnswers).toBe(10);
   });
 
   it('fells one monster per correct answer, builds combo, and records a fast critical hit', () => {
@@ -67,9 +66,8 @@ describe('combat engine', () => {
       answer: answer({ correct: false }),
     });
 
-    expect(miss.playerShield).toBe(2);
     expect(miss.combo).toBe(0);
-    expect(miss.lastEvent).toMatchObject({ kind: 'hurt', playerShield: 2 });
+    expect(miss.lastEvent).toMatchObject({ kind: 'hurt' });
   });
 
   it('lets steady preserve combo through the first miss only', () => {
@@ -106,7 +104,7 @@ describe('combat engine', () => {
     expect(critical.lastEvent).toMatchObject({ critical: true, damage: 20 });
   });
 
-  it('ends in defeat after the third miss and ignores later answers', () => {
+  it('keeps the full learning batch running after repeated misses', () => {
     let state = started();
     for (let index = 0; index < 3; index += 1) {
       state = combatReducer(state, {
@@ -114,11 +112,12 @@ describe('combat engine', () => {
         answer: answer({ correct: false }),
       });
     }
-    const unchanged = combatReducer(state, { type: 'answer', answer: answer() });
+    const continued = combatReducer(state, { type: 'answer', answer: answer() });
 
-    expect(state.phase).toBe('defeat');
-    expect(state.playerShield).toBe(0);
-    expect(unchanged).toBe(state);
+    expect(state.phase).toBe('fighting');
+    expect(state.answersResolved).toBe(3);
+    expect(continued.answersResolved).toBe(4);
+    expect(continued.correctAnswers).toBe(1);
   });
 
   it('resolves victory only after combat is explicitly finished', () => {
@@ -135,5 +134,26 @@ describe('combat engine', () => {
   it('fails a finished battle when the enemy still has health', () => {
     const state = combatReducer(started(10), { type: 'finish' });
     expect(state.phase).toBe('defeat');
+  });
+
+  it('uses the configured correct-answer threshold only at final settlement', () => {
+    let failed = combatReducer(
+      createCombatState(3, { requiredCorrectAnswers: 2 }),
+      { type: 'start', skillId: 'steady' },
+    );
+    failed = combatReducer(failed, { type: 'answer', answer: answer() });
+    failed = combatReducer(failed, { type: 'answer', answer: answer({ correct: false }) });
+    failed = combatReducer(failed, { type: 'answer', answer: answer({ correct: false }) });
+    expect(failed.phase).toBe('fighting');
+    expect(combatReducer(failed, { type: 'finish' }).phase).toBe('defeat');
+
+    let passed = combatReducer(
+      createCombatState(3, { requiredCorrectAnswers: 2 }),
+      { type: 'start', skillId: 'steady' },
+    );
+    passed = combatReducer(passed, { type: 'answer', answer: answer() });
+    passed = combatReducer(passed, { type: 'answer', answer: answer() });
+    passed = combatReducer(passed, { type: 'answer', answer: answer({ correct: false }) });
+    expect(combatReducer(passed, { type: 'finish' }).phase).toBe('victory');
   });
 });

@@ -12,6 +12,7 @@ import { SpeechSettingsDialog } from './components/SpeechSettingsDialog';
 import { WORD_BANKS } from './data/bankRepository';
 import {
   DEFAULT_CHAIN_COUNT,
+  buildClearanceReview,
   buildChainBlueprints,
   buildOfflineChain,
   getChainItems,
@@ -44,7 +45,7 @@ import {
   type BoostDef,
   type BoostId,
 } from './domain/challengeBoosts';
-import { DEFAULT_PLAYER_SHIELD } from './domain/combat';
+import { bossPassingScore, buildBossAssessmentPlan } from './domain/boss';
 import { useAiConnection } from './hooks/useAiConnection';
 import { useAchievements } from './hooks/useAchievements';
 import { useBankCoverage } from './hooks/useBankCoverage';
@@ -179,7 +180,6 @@ export default function WordBuddyApp() {
     nextQuestion,
     pauseAutoAdvance,
     toggleAutoAdvance,
-    finishSession,
     stopSession,
     missedWordIds,
   } = useGameSession(
@@ -191,12 +191,6 @@ export default function WordBuddyApp() {
   );
   const sessionActive = session !== null;
   const previousSessionActive = useRef(sessionActive);
-
-  useEffect(() => {
-    if (combat.state.phase === 'defeat' && session?.phase !== 'complete') {
-      finishSession();
-    }
-  }, [combat.state.phase, finishSession, session?.phase]);
 
   useEffect(() => {
     if (session?.phase === 'complete' && combat.state.phase === 'fighting') {
@@ -266,9 +260,6 @@ export default function WordBuddyApp() {
   const currentWordMastered = currentWord
     ? isWordMastered(learningState.progress[currentWord.id])
     : false;
-  const currentWordProgress = currentWord
-    ? learningState.progress[currentWord.id]
-    : undefined;
   const currentChainItems = session && currentItem
     ? getChainItems(session.queue, currentItem.chainIndex)
     : [];
@@ -290,22 +281,31 @@ export default function WordBuddyApp() {
     const activeLevel = selectedJourney.chapters
       .flatMap((chapter) => chapter.levels)
       .find((level) => level.globalIndex === challengeLevelIndex);
-    const challengeEntries = activeLevel?.kind === 'boss'
+    const isBossAssessment = activeLevel?.kind === 'boss';
+    const challengeEntries = isBossAssessment
       ? getBossLevelEntries(selectedEntries, learningState, challengeLevelIndex, selectedBank)
       : getJourneyLevelEntries(selectedEntries, challengeLevelIndex, selectedBank);
     challengeLevelIndexRef.current = challengeLevelIndex;
 
-    const blueprints = buildChainBlueprints(
-      challengeEntries,
-      learningState,
-      DEFAULT_CHAIN_COUNT,
-      new Date(),
-      selectedBank,
-      difficulty,
-    );
-    const plan: AdaptiveStudyItem[] = [];
+    const plan: AdaptiveStudyItem[] = isBossAssessment
+      ? buildBossAssessmentPlan(
+          challengeEntries,
+          learningState,
+          { speechPlayback: speech.isPlaybackAvailable },
+        )
+      : [];
 
     try {
+      const blueprints = isBossAssessment
+        ? []
+        : buildChainBlueprints(
+            challengeEntries,
+            learningState,
+            DEFAULT_CHAIN_COUNT,
+            new Date(),
+            selectedBank,
+            difficulty,
+          );
       for (const blueprint of blueprints) {
         if (preparationIdRef.current !== preparationId) return;
         if (aiConfigured) {
@@ -317,10 +317,7 @@ export default function WordBuddyApp() {
               reading.passage,
               learningState,
               { speechPlayback: speech.isPlaybackAvailable },
-            )
-              .map((item) => activeLevel?.kind === 'boss'
-                ? { ...item, mode: 'boss' as const }
-                : item);
+            );
             plan.push(...chain);
             continue;
           } catch (error) {
@@ -332,10 +329,7 @@ export default function WordBuddyApp() {
               learningState,
               note,
               { speechPlayback: speech.isPlaybackAvailable },
-            )
-              .map((item) => activeLevel?.kind === 'boss'
-                ? { ...item, mode: 'boss' as const }
-                : item);
+            );
             plan.push(...chain);
             continue;
           }
@@ -345,10 +339,15 @@ export default function WordBuddyApp() {
           learningState,
           'AI 尚未配置，当前显示离线目标词序。',
           { speechPlayback: speech.isPlaybackAvailable },
-        ).map((item) => activeLevel?.kind === 'boss'
-          ? { ...item, mode: 'boss' as const }
-          : item);
+        );
         plan.push(...chain);
+      }
+      if (!isBossAssessment && plan.length === 0 && activeLevel?.newCount === 0) {
+        plan.push(...buildClearanceReview(
+          challengeEntries,
+          learningState,
+          { speechPlayback: speech.isPlaybackAvailable },
+        ));
       }
     } finally {
       if (preparationIdRef.current === preparationId) setSessionPreparing(false);
@@ -368,11 +367,10 @@ export default function WordBuddyApp() {
       setPendingBoostPenalty(false);
       setBoostOffers(drawBoostOffers(boosts, 3));
       gameProgress.beginBattle();
-      const playerShield = Math.max(
-        1,
-        DEFAULT_PLAYER_SHIELD - boostEffects(boosts).shieldPenalty,
+      combat.prepareCombat(
+        plan.length,
+        isBossAssessment ? bossPassingScore(plan.length) : 0,
       );
-      combat.prepareCombat(plan.length, playerShield);
       startSession(plan);
     }
   }
@@ -396,11 +394,6 @@ export default function WordBuddyApp() {
     setActiveBoosts(next);
     persistBoosts(next);
     setDroppedBoostName(null);
-    const playerShield = Math.max(
-      1,
-      DEFAULT_PLAYER_SHIELD - boostEffects(next).shieldPenalty,
-    );
-    combat.prepareCombat(session?.queue.length ?? combat.state.maxEnemyHealth, playerShield);
     // Combat scoring keeps a neutral default tactic; difficulty now comes from boosts.
     combat.chooseSkill('steady');
   }
@@ -573,6 +566,7 @@ export default function WordBuddyApp() {
       {session && combat.state.phase === 'ready' ? (
         <ChallengePrep
           levelNumber={challengeLevelIndex + 1}
+          levelKind={challengeLevel?.kind ?? 'normal'}
           activeBoosts={activeBoosts}
           offers={boostOffers}
           droppedBoostName={droppedBoostName}
@@ -600,6 +594,7 @@ export default function WordBuddyApp() {
           combatState={combat.state}
           bestLevelResult={gameProgress.getLevelResult(selectedBank, challengeLevelIndex + 1)}
           levelProgressPercentage={challengeLevel?.progressPercentage ?? 0}
+          levelWordCount={challengeLevel?.wordCount ?? 0}
           levelNewCount={challengeLevel?.newCount ?? 0}
           levelDueCount={challengeLevel?.dueCount ?? 0}
           nextReviewAt={challengeLevel?.nextReviewAt ?? null}
@@ -612,8 +607,8 @@ export default function WordBuddyApp() {
           missedWordIds={missedWordIds}
           relatedBankNames={currentWordBankNames}
           wordMastered={currentWordMastered}
-          wordProgress={currentWordProgress}
-          hideMonsterWord={boostFx.hideMonsterWord}
+          progressByWordId={learningState.progress}
+          disableMonsterSpeech={boostFx.disableMonsterSpeech}
           hideAnswerCount={boostFx.hideAnswerCount}
           hidePassageDuringQuestions={boostFx.hidePassageDuringQuestions}
           preferSimilarDistractors={boostFx.preferSimilarDistractors}

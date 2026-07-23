@@ -14,14 +14,25 @@ export interface ResolvedAnswerEvent {
 }
 
 export const MODE_TIME_LIMITS: Record<GameMode, number> = {
-  listening: 12_000,
+  listening: 22_000,
   choice: 15_000,
-  sentence: 20_000,
-  boss: 10_000,
+  sentence: 25_000,
+  boss: 22_000,
   'match-meaning': 18_000,
+  'listen-meaning': 20_000,
   'match-word': 15_000,
-  'listen-word': 15_000,
+  'listen-word': 20_000,
 };
+
+const INPUT_MODES = new Set<GameMode>(['listening', 'sentence', 'boss']);
+const AUDIO_MODES = new Set<GameMode>(['listening', 'listen-meaning', 'listen-word']);
+
+/** Applies difficulty scaling without making typing or audio tasks unplayable. */
+export function resolveModeTimeLimit(mode: GameMode, timeScale = 1): number {
+  const safeScale = Number.isFinite(timeScale) ? Math.max(0.1, timeScale) : 1;
+  const minimum = INPUT_MODES.has(mode) || AUDIO_MODES.has(mode) ? 15_000 : 8_000;
+  return Math.max(minimum, Math.round(MODE_TIME_LIMITS[mode] * safeScale));
+}
 
 export const AUTO_ADVANCE_DELAY_MS = 3_000;
 
@@ -66,7 +77,7 @@ export function startChainGroup(
     ...state,
     phase: 'asking',
     questionStartedAt: now,
-    deadline: now + MODE_TIME_LIMITS[item.mode] * timeScale,
+    deadline: now + resolveModeTimeLimit(item.mode, timeScale),
   };
 }
 
@@ -115,13 +126,18 @@ export function replaceUnavailableListening(
   timeScale = 1,
 ): GameSessionState {
   const needsSpeech = (mode: AdaptiveStudyItem['mode']) => (
-    mode === 'listening' || mode === 'listen-word'
+    mode === 'listening' || mode === 'listen-meaning' || mode === 'listen-word'
   );
   const fallbackFor = (mode: AdaptiveStudyItem['mode']) => (
-    mode === 'listening' ? ('choice' as const) : ('match-word' as const)
+    mode === 'listening'
+      ? ('boss' as const)
+      : mode === 'listen-meaning'
+        ? ('match-meaning' as const)
+        : ('match-word' as const)
   );
   let changed = false;
-  const currentWasSpoken = needsSpeech(state.queue[state.index]?.mode ?? 'choice');
+        const currentMode = state.queue[state.index]?.mode ?? 'choice';
+        const currentWasSpoken = needsSpeech(currentMode);
   const queue = state.queue.map((item, index) => {
     if (index < state.index || !needsSpeech(item.mode)) return item;
     changed = true;
@@ -133,7 +149,7 @@ export function replaceUnavailableListening(
     ...state,
     queue,
     questionStartedAt: now,
-    deadline: now + MODE_TIME_LIMITS.choice * timeScale,
+    deadline: now + resolveModeTimeLimit(fallbackFor(currentMode), timeScale),
   };
 }
 
@@ -158,7 +174,7 @@ export function advanceSession(
     phase: startsNewChain ? 'preview' : 'asking',
     answer: null,
     questionStartedAt: now,
-    deadline: startsNewChain ? now : now + MODE_TIME_LIMITS[nextItem.mode] * timeScale,
+    deadline: startsNewChain ? now : now + resolveModeTimeLimit(nextItem.mode, timeScale),
   };
 }
 

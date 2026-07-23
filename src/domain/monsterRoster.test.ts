@@ -39,14 +39,50 @@ describe('buildWaveMonsters', () => {
     const index = buildRarityIndex(entries);
     const monsters = buildWaveMonsters(
       [
-        { word: makeWord('cat'), status: 'defeated' },
-        { word: makeWord('conscientious'), status: 'active' },
+        { word: makeWord('cat'), stage: 'new', status: 'defeated' },
+        {
+          word: makeWord('conscientious'),
+          stage: 'recall',
+          progress: {
+            wordId: 'conscientious',
+            attempts: 5,
+            correct: 2,
+            mastery: 40,
+            card: {
+              due: '2026-07-23T00:00:00.000Z',
+              stability: 1,
+              difficulty: 5,
+              elapsed_days: 1,
+              scheduled_days: 1,
+              learning_steps: 0,
+              reps: 5,
+              lapses: 3,
+              state: 3,
+            },
+          },
+          status: 'active',
+        },
       ],
       index,
     );
-    expect(monsters).toEqual([
-      { wordId: 'cat', word: 'cat', phonetic: '', definitionZh: 'x', tier: 'common', status: 'defeated' },
-      { wordId: 'conscientious', word: 'conscientious', phonetic: '', definitionZh: 'x', tier: 'elite', status: 'active' },
-    ]);
+    expect(monsters[0]).toMatchObject({
+      wordId: 'cat',
+      tier: 'common',
+      learningStage: 'new',
+      attempts: 0,
+      mistakes: 0,
+      mastery: 0,
+      status: 'defeated',
+    });
+    expect(monsters[1]).toMatchObject({
+      wordId: 'conscientious',
+      tier: 'elite',
+      learningStage: 'recall',
+      attempts: 5,
+      mistakes: 3,
+      mastery: 40,
+      status: 'active',
+    });
+    expect(monsters[1].difficultyScore).toBeGreaterThan(monsters[0].difficultyScore);
   });
 });

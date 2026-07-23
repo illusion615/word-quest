@@ -23,7 +23,6 @@ function victory(correct = 9, total = 10, bestCombo = 5) {
         usedHint: false,
       },
     });
-    if (state.phase === 'defeat') break;
   }
   return { ...state, phase: 'victory' as const, bestCombo };
 }
@@ -123,6 +122,34 @@ describe('game progress', () => {
     }));
 
     expect(getClearedLevelNumberSet(migrated, 'gaokao').has(3)).toBe(true);
+  });
+
+  it('moves legacy word levels around inserted Boss nodes without losing Boss clears', () => {
+    const result = {
+      stars: 3 as const,
+      bestCombo: 5,
+      bestScore: 900,
+      wins: 1,
+      attempts: 1,
+      updatedAt: '2026-07-20T00:00:00.000Z',
+    };
+    const migrated = parseGameProgress(JSON.stringify({
+      version: 1,
+      levelResults: {
+        'gaokao:level:5': result,
+        'gaokao:level:6': { ...result, stars: 2 },
+      },
+      clearedLevels: Array.from({ length: 6 }, (_, index) => `gaokao:level:${index + 1}`),
+      clearedBossLevels: ['gaokao:level:5'],
+      totals: { monstersDefeated: 6, criticalHits: 2, highestCombo: 5 },
+    }));
+
+    expect(migrated.journeyLayoutVersion).toBe(2);
+    expect(getClearedLevelNumberSet(migrated, 'gaokao')).toEqual(new Set([1, 2, 3, 4, 5, 6, 7]));
+    expect(migrated.levelResults['gaokao:level:5']).toMatchObject({ stars: 3 });
+    expect(migrated.levelResults['gaokao:level:6']).toMatchObject({ stars: 3 });
+    expect(migrated.levelResults['gaokao:level:7']).toMatchObject({ stars: 2 });
+    expect(getClearedBossLevelSet(migrated).has('gaokao:level:5')).toBe(true);
   });
 
   it('does not promote a new non-clearing win after persistence', () => {

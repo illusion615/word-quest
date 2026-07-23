@@ -18,11 +18,12 @@ interface CombatHudProps {
   enemyKind?: CombatEnemyKind;
   roster?: WaveMonster[];
   onSpeak?: (text: string) => void;
-  hideWord?: boolean;
+  disableMonsterSpeech?: boolean;
+  concealWords?: boolean;
   focusWordId?: string;
 }
 
-export function CombatHud({ state, levelNumber, enemyKind = 'grunt', roster, onSpeak, hideWord = false, focusWordId }: CombatHudProps) {
+export function CombatHud({ state, levelNumber, enemyKind = 'grunt', roster, onSpeak, disableMonsterSpeech = false, concealWords = false, focusWordId }: CombatHudProps) {
   const event = state.lastEvent;
   const pose = useMonsterPresentation(state);
   const monster = resolveMonsterArtwork(state, enemyKind, pose);
@@ -45,7 +46,7 @@ export function CombatHud({ state, levelNumber, enemyKind = 'grunt', roster, onS
     >
       <div className="combat-stage">
         {roster && roster.length > 0 ? (
-          <MonsterRoster monsters={roster} activePose={pose} event={event} onSpeak={onSpeak} hideWord={hideWord} focusWordId={focusWordId} />
+          <MonsterRoster monsters={roster} activePose={pose} event={event} onSpeak={onSpeak} disableMonsterSpeech={disableMonsterSpeech} concealWords={concealWords} focusWordId={focusWordId} combo={state.combo} round={state.answersResolved} />
         ) : (
           <>
             <img
@@ -59,8 +60,8 @@ export function CombatHud({ state, levelNumber, enemyKind = 'grunt', roster, onS
                 {event.kind === 'hit' && (
                   <><Swords aria-hidden="true" /> {event.critical ? '暴击' : '命中'} -{event.damage}</>
                 )}
-                {event.kind === 'hurt' && <>词怪反击 · 护盾 -1</>}
-                {event.kind === 'defeat' && <>护盾破碎</>}
+                {event.kind === 'hurt' && <>词怪反击</>}
+                {event.kind === 'defeat' && <>本场未通过</>}
                 {event.kind === 'victory' && <>词怪击败</>}
               </div>
             )}

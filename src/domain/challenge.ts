@@ -49,13 +49,53 @@ function frequencyDistance(target: WordEntry, candidate: WordEntry): number {
   return Number.POSITIVE_INFINITY;
 }
 
+function normalizedPronunciation(word: WordEntry): string {
+  return (word.phonetic || word.word)
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\s/.[\]'"ˈˌ:ː-]/g, '')
+    .replace(/[^a-z\u0250-\u02af]/g, '');
+}
+
+function editDistance(left: string, right: string): number {
+  if (left === right) return 0;
+  if (!left) return right.length;
+  if (!right) return left.length;
+  const previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
+    const current = [leftIndex];
+    for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
+      current[rightIndex] = Math.min(
+        current[rightIndex - 1] + 1,
+        previous[rightIndex] + 1,
+        previous[rightIndex - 1] + (left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1),
+      );
+    }
+    previous.splice(0, previous.length, ...current);
+  }
+  return previous[right.length];
+}
+
+function pronunciationDistance(target: WordEntry, candidate: WordEntry): number {
+  const left = normalizedPronunciation(target);
+  const right = normalizedPronunciation(candidate);
+  return editDistance(left, right) / Math.max(1, left.length, right.length);
+}
+
 function orderDistractorCandidates(
   word: WordEntry,
   pool: readonly WordEntry[],
   random: () => number,
   preferSimilarDistractors: boolean,
+  preferSimilarPronunciations = false,
 ): WordEntry[] {
   const candidates = shuffle(pool, random);
+  if (preferSimilarPronunciations) {
+    return candidates.sort((left, right) => (
+      pronunciationDistance(word, left) - pronunciationDistance(word, right)
+      || frequencyDistance(word, left) - frequencyDistance(word, right)
+    ));
+  }
   if (!preferSimilarDistractors) return candidates;
   return candidates.sort((left, right) => {
     const leftPosMismatch = left.partOfSpeech === word.partOfSpeech ? 0 : 1;
@@ -152,6 +192,7 @@ export function buildWordOptions(
     optionCount?: number;
     extraOptionCount?: number;
     preferSimilarDistractors?: boolean;
+    preferSimilarPronunciations?: boolean;
     random?: () => number;
   } = {},
 ): WordOption[] {
@@ -166,6 +207,7 @@ export function buildWordOptions(
     pool,
     random,
     config.preferSimilarDistractors ?? false,
+    config.preferSimilarPronunciations ?? false,
   );
   for (const candidate of candidates) {
     if (seen.has(candidate.id)) continue;

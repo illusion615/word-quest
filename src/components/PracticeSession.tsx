@@ -21,6 +21,8 @@ import type {
   WordSenseExample,
 } from '../domain/models';
 import type { CombatState } from '../domain/combat';
+import { BOSS_QUESTION_COUNT, BOSS_STAGES, bossPassingScore } from '../domain/boss';
+import { DEFAULT_NEW_WORD_LIMIT } from '../domain/progress';
 import { calculateStars, type LevelGameResult } from '../domain/gameProgress';
 import {
   buildRarityIndex,
@@ -29,8 +31,8 @@ import {
 } from '../domain/monsterRoster';
 import {
   AUTO_ADVANCE_DELAY_MS,
-  MODE_TIME_LIMITS,
   getRevealedChainWordIds,
+  resolveModeTimeLimit,
   resolveTimeoutSubmission,
 } from '../domain/session';
 import { BossQuestion } from './modes/BossQuestion';
@@ -70,6 +72,7 @@ interface PracticeSessionProps {
   combatState: CombatState;
   bestLevelResult?: LevelGameResult;
   levelProgressPercentage: number;
+  levelWordCount: number;
   levelNewCount: number;
   levelDueCount: number;
   nextReviewAt: string | null;
@@ -87,8 +90,8 @@ interface PracticeSessionProps {
   missedWordIds: Set<string>;
   relatedBankNames: string[];
   wordMastered: boolean;
-  wordProgress?: WordProgress;
-  hideMonsterWord: boolean;
+  progressByWordId: Record<string, WordProgress>;
+  disableMonsterSpeech: boolean;
   hideAnswerCount: boolean;
   hidePassageDuringQuestions: boolean;
   preferSimilarDistractors: boolean;
@@ -109,6 +112,7 @@ const MODE_META: Record<GameMode, string> = {
   sentence: '释义填空',
   boss: '极限挑战',
   'match-meaning': '识义选择',
+  'listen-meaning': '听音识义',
   'match-word': '中文辨形',
   'listen-word': '听音辨词',
 };
@@ -139,6 +143,7 @@ export function PracticeSession({
   combatState,
   bestLevelResult,
   levelProgressPercentage,
+  levelWordCount,
   levelNewCount,
   levelDueCount,
   nextReviewAt,
@@ -151,8 +156,8 @@ export function PracticeSession({
   missedWordIds,
   relatedBankNames,
   wordMastered,
-  wordProgress,
-  hideMonsterWord,
+  progressByWordId,
+  disableMonsterSpeech,
   hideAnswerCount,
   hidePassageDuringQuestions,
   preferSimilarDistractors,
@@ -168,8 +173,12 @@ export function PracticeSession({
 }: PracticeSessionProps) {
   const mode = currentItem?.mode ?? 'choice';
   const modeName = MODE_META[mode];
-  const timerPercent = (remainingMs / (MODE_TIME_LIMITS[mode] * timeScale)) * 100;
+  const timerPercent = (remainingMs / resolveModeTimeLimit(mode, timeScale)) * 100;
   const autoAdvancePercent = (autoAdvanceRemainingMs / AUTO_ADVANCE_DELAY_MS) * 100;
+  const isBossBattle = enemyKind === 'boss';
+  const introducedCount = Math.max(0, levelWordCount - levelNewCount);
+  const remainingBatchCount = Math.ceil(levelNewCount / DEFAULT_NEW_WORD_LIMIT);
+  const currentWordProgress = currentWord ? progressByWordId[currentWord.id] : undefined;
   const revealedWordIds = getRevealedChainWordIds(session);
   const rarityIndex = useMemo(() => buildRarityIndex(entries), [entries]);
   const questionDraftRef = useRef<SessionAnswer | null>(null);
@@ -235,6 +244,8 @@ export function PracticeSession({
   const roster = buildWaveMonsters(
     currentChainItems.map((item): WaveMonsterInput => ({
       word: item.word,
+      stage: item.stage,
+      progress: progressByWordId[item.word.id],
       status: session.phase === 'asking' && item.word.id === currentWord?.id
         ? 'active'
         : revealedWordIds.has(item.word.id)
@@ -257,9 +268,9 @@ export function PracticeSession({
     )
     : undefined;
   function handleStartChain() {
-    const speaksOnStart = currentItem?.mode === 'listening'
-      || currentItem?.mode === 'match-meaning'
-      || currentItem?.mode === 'listen-word';
+    // ListeningQuestion suppresses its own autoplay on the first item; the
+    // selection-based audio modes autoplay when they mount after this change.
+    const speaksOnStart = currentItem?.mode === 'listening';
     if (speechSupported && speaksOnStart && currentWord) {
       onSpeak(currentWord.word);
     }
@@ -272,7 +283,10 @@ export function PracticeSession({
       ? Math.round((session.correctCount / resolvedAnswers) * 100)
       : 0;
     const stars = calculateStars(combatState);
-    const canContinue = levelNewCount > 0 || levelDueCount > 0;
+    const lostBattle = combatState.phase === 'defeat';
+    const bossRequiredCorrect = combatState.requiredCorrectAnswers
+      || bossPassingScore(resolvedAnswers || BOSS_QUESTION_COUNT);
+    const canContinue = lostBattle || isBossBattle || levelNewCount > 0 || levelDueCount > 0;
     const nextReviewLabel = nextReviewAt
       ? new Date(nextReviewAt).toLocaleString('zh-CN', {
           month: 'numeric',
@@ -285,12 +299,20 @@ export function PracticeSession({
       <main className="practice-page is-complete page-width">
         <section className="completion-panel" aria-labelledby="complete-heading">
           <div className="completion-mark"><CheckCircle2 aria-hidden="true" /></div>
-          <p className="eyebrow">第 {levelNumber} 关 · 本次挑战完成</p>
+          <p className="eyebrow">第 {levelNumber} 关 · {isBossBattle ? 'Boss 综合考核' : '本次挑战完成'}</p>
           <h1 id="complete-heading">{session.correctCount} / {resolvedAnswers}</h1>
-          <p>已作答 {resolvedAnswers} 题 · 本次正确率 {score}% · 稳定掌握 {levelProgressPercentage}%</p>
+          <p>{isBossBattle
+            ? `已作答 ${resolvedAnswers} 题 · 本次正确率 ${score}% · ${combatState.phase === 'victory' ? '三阶段已完成' : `未达到 ${bossRequiredCorrect} / ${resolvedAnswers} 及格线`}`
+            : `已作答 ${resolvedAnswers} 题 · 本次正确率 ${score}% · 稳定掌握 ${levelProgressPercentage}%`}</p>
           <p className="review-schedule-summary">
-            {levelNewCount > 0
-              ? `本关还有 ${levelNewCount} 个新词，下一轮不会重复本轮已学词。`
+            {isBossBattle
+              ? combatState.phase === 'victory'
+                ? `Boss ${BOSS_QUESTION_COUNT} 题考核已通过，本关不引入新词。`
+                : `本场答对 ${session.correctCount} / ${resolvedAnswers} 题，至少答对 ${bossRequiredCorrect} 题才通过；所有学习记录均已保留。`
+              : lostBattle && levelNewCount === 0
+                ? `本关 ${levelWordCount} 个词已全部引入；本场未通过，将用薄弱词重新进行通关复核。`
+              : levelNewCount > 0
+              ? `本关已引入 ${introducedCount} / ${levelWordCount} 词；还剩 ${levelNewCount} 个新词，预计 ${remainingBatchCount} 批。`
               : levelDueCount > 0
                 ? `当前还有 ${levelDueCount} 个到期词需要复习。`
                 : `本关当前已完成，下一次复习：${nextReviewLabel}。`}
@@ -301,7 +323,12 @@ export function PracticeSession({
             ))}
           </div>
           <div className="combat-result-stats" aria-label="战斗表现">
-            <div><span>战斗结果</span><strong>{combatState.phase === 'victory' ? '胜利' : '失败'}</strong></div>
+            <div>
+              <span>{isBossBattle ? '考核结果' : '本轮结果'}</span>
+              <strong>{isBossBattle
+                ? combatState.phase === 'victory' ? '通过' : '未通过'
+                : combatState.phase === 'victory' ? '本批完成' : '未完成'}</strong>
+            </div>
             <div><span>最高连击</span><strong>{combatState.bestCombo}</strong></div>
             <div><span>暴击</span><strong>{combatState.criticalHits}</strong></div>
             <div><span>战斗分</span><strong>{combatState.score}</strong></div>
@@ -328,7 +355,11 @@ export function PracticeSession({
               ) : completionAction === 'finished' ? (
                 <>查看通关地图 <CheckCircle2 aria-hidden="true" /></>
               ) : canContinue ? (
-                <>学习下一组 <ArrowRight aria-hidden="true" /></>
+                <>{isBossBattle
+                  ? '重新挑战 Boss'
+                  : lostBattle && levelNewCount === 0
+                    ? '重新挑战通关'
+                    : `继续本关 · 最多 ${Math.min(DEFAULT_NEW_WORD_LIMIT, levelNewCount)} 新词`} <ArrowRight aria-hidden="true" /></>
               ) : (
                 <>等待到期复习</>
               )}
@@ -343,8 +374,12 @@ export function PracticeSession({
   if (!currentWord || !currentItem) return null;
 
   const totalChains = Math.max(...session.queue.map((item) => item.chainIndex)) + 1;
+  const bossStage = BOSS_STAGES[currentItem.chainIndex];
   const reviewAnswer = session.phase === 'answered' ? session.answer : null;
   const reviewed = Boolean(reviewAnswer);
+  const concealMonsterWords = session.phase === 'asking' && (
+    mode === 'listening' || mode === 'listen-meaning' || mode === 'listen-word'
+  );
 
   if (session.phase === 'preview') {
     return (
@@ -353,21 +388,47 @@ export function PracticeSession({
           state={combatState}
           levelNumber={levelNumber}
           enemyKind={enemyKind}
-          headerTitle={`记忆串联 · 第 ${currentItem.chainIndex + 1} / ${totalChains} 组`}
+          headerTitle={isBossBattle
+            ? `Boss · 第 ${currentItem.chainIndex + 1} / ${totalChains} 阶段 · ${bossStage?.name ?? ''}`
+            : `记忆串联 · 第 ${currentItem.chainIndex + 1} / ${totalChains} 组`}
           onExit={onExit}
           preview
-          roster={roster}
+          roster={isBossBattle ? undefined : roster}
           passage={passageNode}
           onSpeak={onSpeak}
-          hideWord={hideMonsterWord}
+          disableMonsterSpeech={disableMonsterSpeech}
           boostCount={boostCount}
         >
           <div className="battle-start-panel">
-            <p className="question-kicker">
-              本组 {currentChainItems.length} 只词怪已就位，{hideMonsterWord ? '目标词已隐藏' : '头顶即目标词'}
-            </p>
+            {isBossBattle ? (
+              <div className="boss-stage-brief">
+                <strong>{bossStage?.name ?? 'Boss'}阶段 · {currentChainItems.length} 题</strong>
+                <span>{bossStage?.goal}</span>
+                <small>全场固定 {session.queue.length} 题，完成第三阶段即结束。</small>
+              </div>
+            ) : (
+              <div className="level-batch-brief">
+                <strong>本关已引入 {introducedCount} / {levelWordCount} 词</strong>
+                {levelNewCount > 0 ? (
+                  <>
+                    <span>本轮最多加入 {Math.min(DEFAULT_NEW_WORD_LIMIT, levelNewCount)} 个新词；开战后不会重复已学词。</span>
+                    <small>当前还剩 {levelNewCount} 个新词，预计 {remainingBatchCount} 批完成本关。</small>
+                  </>
+                ) : (
+                  <>
+                    <span>本轮复核 {session.queue.length} 个薄弱词，不新增词。</span>
+                    <small>赢下本场即可解锁下一关。</small>
+                  </>
+                )}
+              </div>
+            )}
+            {!isBossBattle && (
+              <p className="question-kicker">
+                本组 {currentChainItems.length} 只词怪已就位，{disableMonsterSpeech ? '蒙面生效 · 怪物不可点读' : '点击怪物可听发音'}
+              </p>
+            )}
             <button type="button" className="primary-button" onClick={handleStartChain}>
-              开始挑战 <ArrowRight aria-hidden="true" />
+              {isBossBattle ? `开始${bossStage?.name ?? '挑战'}阶段` : '开始挑战'} <ArrowRight aria-hidden="true" />
             </button>
           </div>
         </BattleScene>
@@ -381,12 +442,15 @@ export function PracticeSession({
         state={combatState}
         levelNumber={levelNumber}
         enemyKind={enemyKind}
-        headerTitle={`${modeName} · ${STAGE_LABELS[currentItem.stage]}`}
+        headerTitle={isBossBattle
+          ? `Boss · ${bossStage?.name ?? ''} · ${modeName}`
+          : `${modeName} · ${STAGE_LABELS[currentItem.stage]}`}
         onExit={onExit}
-        roster={roster}
+        roster={isBossBattle ? undefined : roster}
         passage={hidePassageDuringQuestions ? undefined : passageNode}
         onSpeak={onSpeak}
-        hideWord={hideMonsterWord}
+        disableMonsterSpeech={disableMonsterSpeech}
+        concealMonsterWords={concealMonsterWords}
         boostCount={boostCount}
         rosterFocusWordId={currentWord.id}
       >
@@ -394,7 +458,7 @@ export function PracticeSession({
         {session.phase === 'asking' && (
           <>
             <div className="timer-row">
-              <span>本题剩余</span>
+              <span>{isBossBattle ? `Boss ${session.index + 1} / ${session.queue.length} · ${bossStage?.name}` : '本题剩余'}</span>
               <strong>{Math.ceil(remainingMs / 1000)} 秒</strong>
             </div>
             <div className="timer-track">
@@ -427,7 +491,7 @@ export function PracticeSession({
                 extraOptionCount={extraOptionCount}
                 preferSimilarDistractors={preferSimilarDistractors}
                 reviewed={reviewed}
-                wordProgress={wordProgress}
+                wordProgress={currentWordProgress}
                 onSubmit={handleQuestionSubmit}
               />
             )}
@@ -460,7 +524,26 @@ export function PracticeSession({
                 extraOptionCount={extraOptionCount}
                 preferSimilarDistractors={preferSimilarDistractors}
                 reviewed={reviewed}
-                wordProgress={wordProgress}
+                wordProgress={currentWordProgress}
+              />
+            )}
+            {mode === 'listen-meaning' && (
+              <MatchMeaningQuestion
+                word={currentWord}
+                entries={entries}
+                isSpeechSupported={speechSupported}
+                isSpeaking={speechSpeaking}
+                onSpeak={onSpeak}
+                onOpenSettings={onOpenSpeechSettings}
+                onSubmit={handleQuestionSubmit}
+                onDraftChange={handleDraftChange}
+                hideAnswerCount={hideAnswerCount}
+                extraOptionCount={extraOptionCount}
+                preferSimilarDistractors={preferSimilarDistractors}
+                reviewed={reviewed}
+                audioOnly
+                speechError={speechError}
+                voiceName={speechVoiceName}
               />
             )}
             {mode === 'match-word' && (

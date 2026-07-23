@@ -8,6 +8,7 @@ import {
   createGameSession,
   getRevealedChainWordIds,
   replaceUnavailableListening,
+  resolveModeTimeLimit,
   resolveTimeoutSubmission,
   shouldPauseAfterAnswer,
   shuffleEntries,
@@ -38,6 +39,14 @@ function plan(size: number): AdaptiveStudyItem[] {
 describe('game session', () => {
   it('uses a three-second feedback delay by default', () => {
     expect(AUTO_ADVANCE_DELAY_MS).toBe(3000);
+  });
+
+  it('gives input and audio modes enough time even under stacked haste', () => {
+    expect(resolveModeTimeLimit('boss', 1)).toBe(22_000);
+    expect(resolveModeTimeLimit('sentence', 0.4)).toBe(15_000);
+    expect(resolveModeTimeLimit('listening', 0.4)).toBe(15_000);
+    expect(resolveModeTimeLimit('listen-word', 0.4)).toBe(15_000);
+    expect(resolveModeTimeLimit('match-word', 0.4)).toBe(8_000);
   });
 
   it('submits the current draft when time expires', () => {
@@ -83,7 +92,7 @@ describe('game session', () => {
     }]);
     expect(next.phase).toBe('asking');
     expect(next.index).toBe(1);
-    expect(next.deadline).toBe(2000 + 12_000);
+    expect(next.deadline).toBe(2000 + 22_000);
   });
 
   it('completes after the final answer', () => {
@@ -129,7 +138,7 @@ describe('game session', () => {
     const asking = startChainGroup(createGameSession(plan(3), 1000), 1100);
     const fallback = replaceUnavailableListening(asking, 2000);
 
-    expect(fallback.queue.map((item) => item.mode)).toEqual(['choice', 'choice', 'choice']);
+    expect(fallback.queue.map((item) => item.mode)).toEqual(['choice', 'boss', 'boss']);
     expect(fallback.questionStartedAt).toBe(1100);
 
     const secondQuestion = {
@@ -142,8 +151,8 @@ describe('game session', () => {
     };
     const liveFallback = replaceUnavailableListening(secondQuestion, 4000);
 
-    expect(liveFallback.queue[1].mode).toBe('choice');
-    expect(liveFallback.deadline).toBe(4000 + 15_000);
+    expect(liveFallback.queue[1].mode).toBe('boss');
+    expect(liveFallback.deadline).toBe(4000 + 22_000);
   });
 
   it('pauses for a new memory-chain preview after four words', () => {
