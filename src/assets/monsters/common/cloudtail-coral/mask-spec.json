@@ -1,0 +1,10 @@
+{
+  "alphaThreshold": 4,
+  "padding": 12,
+  "anchors": {
+    "aloof": { "x": 241, "y": 297 },
+    "challenge": { "x": 745, "y": 260 },
+    "vanquished": { "x": 261, "y": 778 },
+    "triumphant": { "x": 749, "y": 756 }
+  }
+}

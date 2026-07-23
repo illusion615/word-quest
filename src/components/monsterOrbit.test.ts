@@ -40,4 +40,15 @@ describe('monster orbit', () => {
     expect(monsterOrbitRotation(1, 5)).toBe(-72);
     expect(monsterOrbitRotation(2, 5)).toBe(-144);
   });
+
+  it('hides only the exact back slot so no narrow silhouette peeks behind the focus', () => {
+    const positions = Array.from({ length: 4 }, (_, index) => (
+      monsterOrbitPosition(index, 2, 4)
+    ));
+
+    expect(positions[0]).toMatchObject({ angleDeg: 180, depth: 1, opacity: 0 });
+    expect(positions[1].opacity).toBeGreaterThan(0);
+    expect(positions[2]).toMatchObject({ angleDeg: 0, opacity: 1 });
+    expect(positions[3].opacity).toBeGreaterThan(0);
+  });
 });

@@ -9,6 +9,7 @@ import {
 } from './combatArtwork';
 import { MonsterRoster } from './MonsterRoster';
 import { useMonsterPresentation } from '../hooks/useMonsterPresentation';
+import { useRosterMonsterPresentation } from '../hooks/useRosterMonsterPresentation';
 
 export type { CombatEnemyKind } from './combatArtwork';
 
@@ -25,8 +26,11 @@ interface CombatHudProps {
 
 export function CombatHud({ state, levelNumber, enemyKind = 'grunt', roster, onSpeak, disableMonsterSpeech = false, concealWords = false, focusWordId }: CombatHudProps) {
   const event = state.lastEvent;
-  const pose = useMonsterPresentation(state);
-  const monster = resolveMonsterArtwork(state, enemyKind, pose);
+  const bossPose = useMonsterPresentation(state);
+  const activeRosterWordId = roster?.find((monster) => monster.status === 'active')?.wordId;
+  const rosterPose = useRosterMonsterPresentation(activeRosterWordId);
+  const visualPose = roster && roster.length > 0 ? rosterPose : bossPose;
+  const monster = resolveMonsterArtwork(state, enemyKind, bossPose);
 
   useEffect(() => {
     const images = getMonsterArtworkSources(enemyKind).map((src) => {
@@ -41,12 +45,12 @@ export function CombatHud({ state, levelNumber, enemyKind = 'grunt', roster, onS
 
   return (
     <section
-      className={`combat-hud is-${state.phase} is-${enemyKind} pose-${pose}`}
+      className={`combat-hud is-${state.phase} is-${enemyKind} pose-${visualPose}`}
       aria-label={`第 ${levelNumber} 关战斗状态`}
     >
       <div className="combat-stage">
         {roster && roster.length > 0 ? (
-          <MonsterRoster monsters={roster} activePose={pose} event={event} onSpeak={onSpeak} disableMonsterSpeech={disableMonsterSpeech} concealWords={concealWords} focusWordId={focusWordId} combo={state.combo} round={state.answersResolved} />
+          <MonsterRoster monsters={roster} activePose={rosterPose} event={event} onSpeak={onSpeak} disableMonsterSpeech={disableMonsterSpeech} concealWords={concealWords} focusWordId={focusWordId} combo={state.combo} round={state.answersResolved} />
         ) : (
           <>
             <img

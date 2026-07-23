@@ -1746,6 +1746,7 @@ html[data-theme="dark"] .battle-passage-strip {
   flex: 1 1 auto;
   max-height: none;
   min-height: 0;
+  padding-top: clamp(52px, 5vh, 60px);
 }
 
 .battle-action-panel::-webkit-scrollbar { display: none; }
@@ -2438,8 +2439,8 @@ html[data-theme="dark"] .battle-scene.is-boss .boss-stage-brief {
 }
 
 .battle-scene.is-asking .combat-hud {
-  flex: 0 0 clamp(206px, 28vh, 280px);
-  min-height: clamp(206px, 28vh, 280px);
+  flex: 0 0 clamp(320px, 40dvh, 410px);
+  min-height: clamp(320px, 40dvh, 410px);
 }
 
 .battle-scene.is-asking .combat-hud.is-boss {
@@ -2821,33 +2822,40 @@ html[data-theme="dark"] .battle-header {
 }
 
 .roster-monster.tier-uncommon { --tier-scale: 1.05; }
-.roster-monster.tier-uncommon img {
+.roster-monster.tier-uncommon[data-monster-character="legacy-grunt"] img {
   filter: drop-shadow(0 10px 8px rgba(25, 24, 22, 0.28)) hue-rotate(150deg) saturate(1.1);
 }
 .roster-monster.tier-rare { --tier-scale: 1.12; }
 .roster-monster.tier-rare img {
+  filter: drop-shadow(0 12px 9px rgba(25, 24, 22, 0.3));
+}
+.roster-monster.tier-rare[data-monster-character="legacy-grunt"] img {
   filter: drop-shadow(0 12px 9px rgba(25, 24, 22, 0.3)) hue-rotate(255deg) saturate(1.25);
 }
 .roster-monster.tier-elite { --tier-scale: 1.2; }
-.roster-monster.tier-elite img {
+.roster-monster.tier-elite[data-monster-character="legacy-grunt"] img {
   filter: drop-shadow(0 14px 10px rgba(25, 24, 22, 0.34)) hue-rotate(-35deg) saturate(1.5) brightness(0.94);
 }
 
 .roster-monster.is-pending { --status-opacity: 0.94; }
-.roster-monster.is-defeated { --status-opacity: 0.52; filter: grayscale(0.55); }
-.roster-monster.is-missed { --status-opacity: 0.86; }
-.roster-monster.is-missed img {
-  filter: drop-shadow(0 9px 7px rgba(25, 24, 22, 0.3)) sepia(0.55) saturate(3) hue-rotate(-28deg);
-}
+.roster-monster.is-defeated { --status-opacity: 0.9; }
+.roster-monster.is-missed { --status-opacity: 0.95; }
 
 /* The focus monster leans forward, reads brightest, and drives the idle bob. */
 .roster-monster.is-focus {
   --focus-boost: 1.12;
   --status-opacity: 1;
 }
-.roster-monster.is-active img { animation: monster-idle 1.6s ease-in-out infinite; }
-.roster-monster.is-active.pose-hit img { animation: monster-hurt 320ms ease-out; }
-.roster-monster.is-active.pose-attacking img { animation: monster-attack 360ms ease-out; }
+.roster-monster.is-active.pose-aloof img { animation: monster-idle 1.6s ease-in-out infinite; }
+.roster-monster.is-active.pose-challenge img {
+  animation: roster-monster-challenge 800ms cubic-bezier(0.2, 0.78, 0.28, 1) both;
+}
+.roster-monster.is-defeated.pose-vanquished img {
+  animation: roster-monster-vanquished 480ms ease-out both;
+}
+.roster-monster.is-missed.pose-triumphant img {
+  animation: roster-monster-triumphant 620ms cubic-bezier(0.2, 0.82, 0.32, 1) both;
+}
 
 .roster-feedback {
   position: absolute;
@@ -2892,6 +2900,27 @@ html[data-theme="dark"] .battle-header {
 @keyframes monster-idle {
   0%, 100% { transform: translateY(0) scale(1); }
   50% { transform: translateY(-5px) scale(1.02); }
+}
+
+@keyframes roster-monster-challenge {
+  0% { opacity: 0.65; transform: translateX(18px) translateY(12px) scale(0.84); }
+  52% { opacity: 1; transform: translateX(-16px) translateY(-8px) scale(1.13); }
+  76% { transform: translateX(4px) translateY(2px) scale(0.98); }
+  100% { opacity: 1; transform: translateX(0) translateY(0) scale(1); }
+}
+
+@keyframes roster-monster-vanquished {
+  0% { transform: translateX(0) rotate(0) scale(1.06); }
+  36% { transform: translateX(12px) rotate(4deg) scale(0.97); }
+  68% { transform: translateX(-5px) rotate(-2deg) scale(1); }
+  100% { transform: translateX(0) rotate(0) scale(1); }
+}
+
+@keyframes roster-monster-triumphant {
+  0% { transform: translateY(16px) scale(0.9); }
+  56% { transform: translateY(-12px) scale(1.1); }
+  78% { transform: translateY(3px) scale(0.98); }
+  100% { transform: translateY(0) scale(1); }
 }
 
 @keyframes monster-dialogue-pop {
@@ -5700,11 +5729,12 @@ html[data-theme="dark"] .battle-header {
   .battle-scene.is-asking .battle-action-panel {
     bottom: 0;
     max-height: none;
+    padding-top: 28px;
   }
 
   .battle-scene.is-asking .combat-hud {
-    flex-basis: clamp(232px, 31dvh, 274px);
-    min-height: clamp(232px, 31dvh, 274px);
+    flex-basis: clamp(270px, 36dvh, 312px);
+    min-height: clamp(270px, 36dvh, 312px);
   }
 
   /* Keep the same orbital motion on narrow screens while compressing only the

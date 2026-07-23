@@ -50,6 +50,7 @@ export function monsterOrbitPosition(
   const angleRad = angleDeg * (Math.PI / 180);
   const depth = (1 - Math.cos(angleRad)) / 2;
   const side = Math.abs(Math.sin(angleRad));
+  const hiddenBehindFocus = depth > 0.98;
 
   return {
     slot,
@@ -62,6 +63,6 @@ export function monsterOrbitPosition(
     // while a small residual turn still reveals the curvature of the formation.
     facingDeg: -angleDeg * 0.92,
     scale: Math.max(0.68, 1 - (depth * 0.22) - (side * 0.04)),
-    opacity: Math.max(0.34, 1 - (depth * 0.58)),
+    opacity: hiddenBehindFocus ? 0 : Math.max(0.34, 1 - (depth * 0.58)),
   };
 }

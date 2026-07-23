@@ -5,14 +5,13 @@ import { Swords } from '../icons';
 import { monsterPoseArtwork } from './combatArtwork';
 import { resolveMonsterDialogue } from './monsterDialogue';
 import { monsterOrbitPosition, monsterOrbitRotation } from './monsterOrbit';
-import type { MonsterPose } from './monsterPresentation';
+import type { RosterMonsterPose } from './rosterMonsterPresentation';
 
-const STATUS_POSE: Record<WaveMonster['status'], MonsterPose> = {
-  pending: 'idle',
-  active: 'idle',
-  defeated: 'defeated',
-  // A missed monster was NOT defeated — it counterattacked and stays standing.
-  missed: 'attacking',
+const STATUS_POSE: Record<WaveMonster['status'], RosterMonsterPose> = {
+  pending: 'aloof',
+  active: 'aloof',
+  defeated: 'vanquished',
+  missed: 'triumphant',
 };
 
 const TIER_LABEL: Record<WaveMonster['tier'], string> = {
@@ -24,7 +23,7 @@ const TIER_LABEL: Record<WaveMonster['tier'], string> = {
 
 interface MonsterRosterProps {
   monsters: WaveMonster[];
-  activePose: MonsterPose;
+  activePose: RosterMonsterPose;
   event: CombatEvent | null;
   onSpeak?: (text: string) => void;
   disableMonsterSpeech?: boolean;
@@ -78,7 +77,7 @@ export function MonsterRoster({
       >
         {monsters.map((monster, index) => {
           const pose = monster.status === 'active' ? activePose : STATUS_POSE[monster.status];
-          const art = monsterPoseArtwork(pose);
+          const art = monsterPoseArtwork(pose, monster.tier, monster.wordId);
           const orbit = monsterOrbitPosition(index, focusIndex, monsters.length);
           const isFocus = index === focusIndex;
           const waitsOffstage = Boolean(focusWordId) && !isFocus;
@@ -92,6 +91,7 @@ export function MonsterRoster({
             <div
               key={monster.wordId}
               className={`roster-monster tier-${monster.tier} is-${monster.status} pose-${pose}${isFocus ? ' is-focus' : ''}`}
+              data-monster-character={art.characterId}
               title={concealWords || waitsOffstage
                 ? `${TIER_LABEL[monster.tier]}${speechDisabled ? '' : ' · 点击听发音'}`
                 : disableMonsterSpeech

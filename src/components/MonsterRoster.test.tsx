@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { CombatEvent } from '../domain/combat';
 import type { WaveMonster } from '../domain/monsterRoster';
+import { monsterPoseArtwork } from './combatArtwork';
 import { MonsterRoster } from './MonsterRoster';
 
 const monsters: WaveMonster[] = [
@@ -51,7 +52,7 @@ describe('MonsterRoster', () => {
     const html = renderToStaticMarkup(
       <MonsterRoster
         monsters={monsters}
-        activePose="idle"
+        activePose="challenge"
         event={null}
         onSpeak={() => undefined}
         focusWordId="achieve"
@@ -62,6 +63,7 @@ describe('MonsterRoster', () => {
     expect(html).toContain('monster-dialogue is-taunt');
     expect(html).toContain('level-assertive');
     expect(html).toContain('class="monster-orbit-track"');
+    expect(html).toContain('pose-challenge');
     expect(html).toContain('rotateY(0deg)');
     expect(html).toContain('translateZ(var(--orbit-radius))');
     expect(html).not.toContain('roster-word');
@@ -70,10 +72,11 @@ describe('MonsterRoster', () => {
   });
 
   it('shows a staggered reaction after the focused monster is answered correctly', () => {
+    const expectedArtwork = monsterPoseArtwork('vanquished', 'common', monsters[0].wordId);
     const html = renderToStaticMarkup(
       <MonsterRoster
-        monsters={[{ ...monsters[0], status: 'defeated' }]}
-        activePose="hit"
+        monsters={[{ ...monsters[0], tier: 'common', status: 'defeated' }]}
+        activePose="aloof"
         event={hitEvent}
         focusWordId="achieve"
       />,
@@ -81,6 +84,26 @@ describe('MonsterRoster', () => {
 
     expect(html).toContain('monster-dialogue is-staggered');
     expect(html).toContain('roster-feedback is-hit');
+    expect(html).toContain('pose-vanquished');
+    expect(html).toContain(`data-monster-character="${expectedArtwork.characterId}"`);
+    expect(html).toContain(`alt="${expectedArtwork.alt}"`);
+  });
+
+  it('shows the common monster gloating after the learner misses it', () => {
+    const expectedArtwork = monsterPoseArtwork('triumphant', 'common', monsters[0].wordId);
+    const html = renderToStaticMarkup(
+      <MonsterRoster
+        monsters={[{ ...monsters[0], tier: 'common', status: 'missed' }]}
+        activePose="aloof"
+        event={{ ...hitEvent, kind: 'hurt', damage: 0, combo: 0 }}
+        focusWordId="achieve"
+      />,
+    );
+
+    expect(html).toContain('monster-dialogue is-gloating');
+    expect(html).toContain('pose-triumphant');
+    expect(html).toContain(`data-monster-character="${expectedArtwork.characterId}"`);
+    expect(html).toContain(`alt="${expectedArtwork.alt}"`);
   });
 
   it('writes a real track transform when the focus advances around the ring', () => {
@@ -90,7 +113,7 @@ describe('MonsterRoster', () => {
           { ...monsters[0], status: 'defeated' },
           { ...monsters[1], status: 'active' },
         ]}
-        activePose="idle"
+        activePose="aloof"
         event={null}
         focusWordId="credit"
       />,
@@ -104,7 +127,7 @@ describe('MonsterRoster', () => {
     const html = renderToStaticMarkup(
       <MonsterRoster
         monsters={monsters}
-        activePose="idle"
+        activePose="aloof"
         event={null}
         onSpeak={() => undefined}
         disableMonsterSpeech
@@ -120,7 +143,7 @@ describe('MonsterRoster', () => {
     const html = renderToStaticMarkup(
       <MonsterRoster
         monsters={monsters}
-        activePose="idle"
+        activePose="aloof"
         event={null}
         onSpeak={() => undefined}
         concealWords
