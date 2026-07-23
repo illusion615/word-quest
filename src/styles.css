@@ -2442,6 +2442,11 @@ html[data-theme="dark"] .battle-scene.is-boss .boss-stage-brief {
   min-height: clamp(206px, 28vh, 280px);
 }
 
+.battle-scene.is-asking .combat-hud.is-boss {
+  flex-basis: clamp(320px, 46dvh, 540px);
+  min-height: clamp(320px, 46dvh, 540px);
+}
+
 .battle-header {
   position: relative;
   z-index: 8;
@@ -2456,20 +2461,6 @@ html[data-theme="dark"] .battle-scene.is-boss .boss-stage-brief {
   border: 0;
   background: transparent;
   box-shadow: none;
-}
-
-.battle-scene.is-boss .battle-header {
-  border: 1px solid rgba(255, 255, 255, 0.62);
-  border-radius: 12px;
-  background: rgba(255, 250, 240, 0.74);
-  box-shadow: 0 8px 22px rgba(36, 36, 74, 0.14);
-  -webkit-backdrop-filter: blur(12px) saturate(1.08);
-  backdrop-filter: blur(12px) saturate(1.08);
-}
-
-html[data-theme="dark"] .battle-scene.is-boss .battle-header {
-  border-color: rgba(255, 255, 255, 0.12);
-  background: rgba(31, 28, 61, 0.74);
 }
 
 html[data-theme="dark"] .battle-header {
@@ -2622,14 +2613,18 @@ html[data-theme="dark"] .battle-header {
 }
 
 .combat-hud.is-boss .combat-stage {
-  inset: 62px 0 0;
+  inset: 0;
+  overflow: visible;
 }
 
 .combat-hud.is-boss .combat-monster {
-  width: clamp(820px, 82vw, 1220px);
-  height: clamp(820px, 82vw, 1220px);
-  margin-bottom: clamp(60px, 15vh, 150px);
-  translate: -19% -136px;
+  width: auto;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin-bottom: 0;
+  filter: drop-shadow(0 30px 22px rgba(25, 24, 22, 0.42));
+  translate: none;
 }
 
 .combat-monster.is-idle {
@@ -5220,10 +5215,6 @@ html[data-theme="dark"] .battle-header {
     height: clamp(620px, 80vw, 760px);
   }
 
-  .combat-hud.is-boss .combat-monster {
-    width: clamp(700px, 88vw, 840px);
-    height: clamp(700px, 88vw, 840px);
-  }
 }
 
 @media (max-width: 680px) {
@@ -5644,17 +5635,6 @@ html[data-theme="dark"] .battle-header {
     height: min(165vw, 640px);
     margin-bottom: 210px;
     translate: -13% -86px;
-  }
-
-  .combat-hud.is-boss .combat-stage {
-    inset: 104px 0 0;
-  }
-
-  .combat-hud.is-boss .combat-monster {
-    width: min(180vw, 700px);
-    height: min(180vw, 700px);
-    margin-bottom: 186px;
-    translate: -11% -76px;
   }
 
   .battle-context-panel {
