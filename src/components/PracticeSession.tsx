@@ -468,7 +468,30 @@ export function PracticeSession({
         )}
 
         {(session.phase === 'asking' || session.phase === 'answered') && (
-          <div key={questionKey}>
+          <div
+            key={questionKey}
+            className={reviewAnswer ? 'question-review-shell' : undefined}
+          >
+            {reviewAnswer && (
+              <InlineQuestionReview
+                word={currentWord}
+                isLastQuestion={session.index + 1 >= session.queue.length}
+                autoAdvancePercent={autoAdvancePercent}
+                autoAdvancePaused={autoAdvancePaused}
+                onToggleAutoAdvance={onToggleAutoAdvance}
+                onNext={onNext}
+                aiConfigured={aiConfigured}
+                aiInsight={aiInsight}
+                onAskAi={onAskAi}
+                relatedBankNames={relatedBankNames}
+                wordMastered={wordMastered}
+                wordProgress={currentWordProgress}
+                speechSupported={speechSupported}
+                speechSpeaking={speechSpeaking}
+                onSpeak={onSpeak}
+              />
+            )}
+            <div className="review-question-content">
             {mode === 'listening' && (
               <ListeningQuestion
                 word={currentWord}
@@ -572,24 +595,8 @@ export function PracticeSession({
                 onSubmit={handleQuestionSubmit}
               />
             )}
+            </div>
           </div>
-        )}
-
-        {reviewAnswer && (
-          <InlineQuestionReview
-            key={`review:${questionKey}`}
-            word={currentWord}
-            isLastQuestion={session.index + 1 >= session.queue.length}
-            autoAdvancePercent={autoAdvancePercent}
-            autoAdvancePaused={autoAdvancePaused}
-            onToggleAutoAdvance={onToggleAutoAdvance}
-            onNext={onNext}
-            aiConfigured={aiConfigured}
-            aiInsight={aiInsight}
-            onAskAi={onAskAi}
-            relatedBankNames={relatedBankNames}
-            wordMastered={wordMastered}
-          />
         )}
         </section>
       </BattleScene>

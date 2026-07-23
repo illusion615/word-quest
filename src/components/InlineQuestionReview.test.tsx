@@ -29,6 +29,10 @@ describe('InlineQuestionReview', () => {
         onAskAi={() => undefined}
         relatedBankNames={['高考词汇']}
         wordMastered={false}
+        wordProgress={{ attempts: 3, correct: 2, mastery: 67 }}
+        speechSupported
+        speechSpeaking={false}
+        onSpeak={() => undefined}
       />,
     );
 
@@ -37,6 +41,17 @@ describe('InlineQuestionReview', () => {
     expect(html).toContain('暂停自动计时');
     expect(html).toContain('下一题');
     expect(html).toContain('AI 词汇教练');
+    expect(html).toContain('aria-label="AI 词汇教练"');
+    expect(html).toContain('inline-review-toolbar');
+    expect(html).toContain('inline-auto-progress');
+    expect(html).toContain(`stroke-dashoffset:25`);
+    expect(html).toContain(TEST_WORDS[0].word);
+    expect(html).toContain('播放单词发音');
+    expect(html).toContain('高考词汇');
+    expect(html).not.toContain('<dt>状态</dt>');
+    expect(html).toContain('<dt>练习</dt><dd>3</dd>');
+    expect(html).toContain('<dt>答对</dt><dd>2</dd>');
+    expect(html).toContain('<dt>正确率</dt><dd>67%</dd>');
     expect(html).not.toContain('查看该义项例句');
     expect(html).not.toContain('连接 AI 后生成此义项的用法例句');
   });

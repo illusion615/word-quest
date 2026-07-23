@@ -2,7 +2,6 @@ import {
   lazy,
   Suspense,
   useState,
-  type CSSProperties,
 } from 'react';
 import {
   ArrowRight,
@@ -13,9 +12,11 @@ import {
   Play,
   RefreshCw,
   Sparkles,
+  Volume2,
 } from '../icons';
 import type {
   WordEntry,
+  WordProgress,
   WordSenseExample,
 } from '../domain/models';
 import { parseDefinitionSenses } from '../domain/wordText';
@@ -42,6 +43,10 @@ interface InlineQuestionReviewProps {
   onAskAi: (word: WordEntry, pauseReview?: boolean) => void;
   relatedBankNames: string[];
   wordMastered: boolean;
+  wordProgress?: Pick<WordProgress, 'attempts' | 'correct' | 'mastery'>;
+  speechSupported: boolean;
+  speechSpeaking: boolean;
+  onSpeak: (text: string) => void;
 }
 
 interface AiCoachSenseExamplesProps {
@@ -78,9 +83,15 @@ export function InlineQuestionReview({
   onAskAi,
   relatedBankNames,
   wordMastered,
+  wordProgress,
+  speechSupported,
+  speechSpeaking,
+  onSpeak,
 }: InlineQuestionReviewProps) {
   const [coachOpen, setCoachOpen] = useState(false);
   const currentAi = aiInsight?.wordId === word.id ? aiInsight : null;
+  const timerProgress = Math.min(100, Math.max(0, autoAdvancePercent));
+  const autoAdvanceLabel = autoAdvancePaused ? '继续自动计时' : '暂停自动计时';
 
   function toggleCoach() {
     if (!aiConfigured) {
@@ -92,49 +103,83 @@ export function InlineQuestionReview({
   }
 
   return (
-    <section className="inline-question-review">
-      <div className="inline-review-controls">
-        <button
-          type="button"
-          className="secondary-button"
-          onClick={onToggleAutoAdvance}
-          aria-pressed={autoAdvancePaused}
-        >
-          {autoAdvancePaused ? <Play aria-hidden="true" /> : <Pause aria-hidden="true" />}
-          {autoAdvancePaused ? '继续自动计时' : '暂停自动计时'}
-        </button>
-        <button
-          type="button"
-          className="primary-button answer-advance-next"
-          onClick={onNext}
-          style={{ ['--advance']: autoAdvancePercent } as CSSProperties}
-        >
-          {isLastQuestion ? '查看结果' : '下一题'}
-          <ArrowRight aria-hidden="true" />
-        </button>
+    <section className="inline-question-review" data-coach-open={coachOpen}>
+      <div className="inline-review-toolbar">
         <button
           type="button"
           className={`secondary-button inline-ai-toggle ${coachOpen ? 'is-open' : ''}`}
           onClick={toggleCoach}
           aria-expanded={coachOpen}
+          aria-label="AI 词汇教练"
+          title="AI 词汇教练"
         >
           <Sparkles aria-hidden="true" />
-          AI 词汇教练
+          <span>AI 词汇教练</span>
         </button>
-        <span className="inline-review-timer" aria-live="polite">
-          {autoAdvancePaused ? '自动前进已暂停' : '自动前进中'}
-        </span>
+        <div className="inline-review-word-summary">
+          <div className="inline-review-word-main">
+            <button
+              type="button"
+              className="word-audio inline-review-audio"
+              onClick={() => onSpeak(word.word)}
+              disabled={!speechSupported || speechSpeaking}
+              aria-label={speechSpeaking ? '正在播放发音' : '播放单词发音'}
+              title={speechSupported ? '播放单词发音' : '当前浏览器不支持发音'}
+            >
+              <Volume2 aria-hidden="true" />
+            </button>
+            <div className="inline-review-lexeme">
+              <strong>{word.word}</strong>
+              <span>{word.phonetic}{word.partOfSpeech ? ` · ${word.partOfSpeech}` : ''}</span>
+            </div>
+          </div>
+          <div className="inline-review-word-context">
+            <span
+              className={`inline-review-banks ${wordMastered ? 'is-mastered' : ''}`}
+              title={relatedBankNames.join(' · ')}
+            >
+              <Layers3 aria-hidden="true" />
+              <span>{relatedBankNames.length > 0 ? relatedBankNames.join(' · ') : '当前词库'}</span>
+            </span>
+            <dl className="answer-stats-inline inline-review-kpis" aria-label="本词学习进度">
+              <div><dt>练习</dt><dd>{wordProgress?.attempts ?? 0}</dd></div>
+              <div><dt>答对</dt><dd>{wordProgress?.correct ?? 0}</dd></div>
+              <div><dt>正确率</dt><dd>{wordProgress?.mastery ?? 0}%</dd></div>
+            </dl>
+          </div>
+        </div>
+        <div className="inline-review-actions">
+          <button
+            type="button"
+            className="inline-auto-toggle"
+            onClick={onToggleAutoAdvance}
+            aria-label={autoAdvanceLabel}
+            aria-pressed={autoAdvancePaused}
+            title={autoAdvanceLabel}
+          >
+            <svg className="inline-auto-progress" viewBox="0 0 44 44" aria-hidden="true">
+              <circle className="inline-auto-track" cx="22" cy="22" r="19" pathLength="100" />
+              <circle
+                className="inline-auto-value"
+                cx="22"
+                cy="22"
+                r="19"
+                pathLength="100"
+                style={{ strokeDashoffset: 100 - timerProgress }}
+              />
+            </svg>
+            {autoAdvancePaused ? <Play aria-hidden="true" /> : <Pause aria-hidden="true" />}
+          </button>
+          <button
+            type="button"
+            className="primary-button inline-review-next"
+            onClick={onNext}
+          >
+            {isLastQuestion ? '查看结果' : '下一题'}
+            <ArrowRight aria-hidden="true" />
+          </button>
+        </div>
       </div>
-
-      {relatedBankNames.length > 0 && (
-        <p className={`answer-bank-note ${wordMastered ? 'is-mastered' : ''}`}>
-          <Layers3 aria-hidden="true" />
-          <span>
-            {wordMastered ? '已进入稳定掌握' : '本次作答已更新复习计划'}
-            <em>收录于 {relatedBankNames.join(' · ')}</em>
-          </span>
-        </p>
-      )}
 
       {coachOpen && aiConfigured && (
         <section className="inline-ai-coach" aria-labelledby="inline-ai-heading">

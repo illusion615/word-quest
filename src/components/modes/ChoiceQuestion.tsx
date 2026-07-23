@@ -44,6 +44,7 @@ export function ChoiceQuestion({
           </dl>
         )}
       </div>
+      <p className="question-kicker">选择正确释义</p>
       <div
         className="choice-grid"
         role="group"

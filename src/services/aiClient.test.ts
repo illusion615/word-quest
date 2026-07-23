@@ -127,7 +127,12 @@ describe('AI client', () => {
       expect(systemPrompt).toContain('GitHub-flavored Markdown');
       expect(systemPrompt).toContain('exactly three level-3');
       expect(systemPrompt).toContain('raw HTML');
-      expect(systemPrompt).toContain('explain EVERY supplied Chinese sense');
+      expect(systemPrompt).toContain('exactly one item for EVERY supplied Chinese sense');
+      expect(systemPrompt).toContain('Never combine multiple senses in one item');
+      expect(systemPrompt).toContain('do not leave a leading space inside the bold text');
+      expect(systemPrompt).toContain('exactly three flat unordered-list items');
+      expect(systemPrompt).toContain('Every list marker must begin at the start of a new line');
+      expect(systemPrompt).toContain('do not repeat example sentences');
       expect(systemPrompt).toContain('grammar or technical term');
       expect(systemPrompt).toContain('standard form or pattern');
       expect(systemPrompt).toContain('common mistake or limitation');

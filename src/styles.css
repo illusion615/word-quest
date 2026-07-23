@@ -3529,37 +3529,238 @@ html[data-theme="dark"] .battle-header {
 .inline-question-review {
   display: grid;
   width: min(1120px, 100%);
-  gap: 12px;
+  gap: 10px;
   margin: 0 auto;
-  padding: 14px 0 4px;
-  border-top: 1px solid var(--cp-border);
+  padding: 4px 0;
   text-align: left;
 }
 
-.inline-review-controls {
+.inline-review-toolbar {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  align-items: start;
-  gap: 9px 10px;
-}
-
-.inline-review-controls > button {
-  width: 100%;
   min-width: 0;
+  grid-template-columns: max-content minmax(320px, 1fr) max-content;
+  align-items: start;
+  gap: 10px 18px;
 }
 
-.inline-review-controls .inline-ai-toggle.is-open {
+.inline-ai-toggle {
+  align-self: start;
+  justify-self: start;
+  min-width: 0;
+  min-height: 44px;
+  margin-top: 4px;
+  white-space: nowrap;
+}
+
+.inline-ai-toggle.is-open {
   border-color: var(--cp-accent);
   background: var(--cp-accent-soft);
   color: var(--cp-accent);
 }
 
-.inline-review-timer {
-  grid-column: 1 / -1;
-  color: var(--cp-text-muted);
-  font-size: 11px;
-  font-weight: 700;
+.inline-review-word-summary {
+  display: grid;
+  min-width: 0;
+  justify-items: center;
+  gap: 7px;
+}
+
+.inline-review-word-main {
+  display: flex;
+  min-width: 0;
+  min-height: 50px;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+}
+
+.inline-review-audio {
+  width: 30px;
+  height: 30px;
+  flex-basis: 30px;
+}
+
+.inline-review-audio svg {
+  width: 15px;
+  height: 15px;
+}
+
+.inline-review-lexeme {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  justify-content: center;
+  gap: 8px 12px;
   text-align: center;
+}
+
+.inline-review-lexeme strong {
+  overflow: hidden;
+  color: var(--cp-text);
+  font-size: clamp(36px, 3.6vw, 48px);
+  line-height: 1;
+  text-overflow: ellipsis;
+}
+
+.inline-review-lexeme span {
+  overflow: hidden;
+  color: var(--cp-text-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inline-review-word-context {
+  display: grid;
+  min-width: 0;
+  justify-items: center;
+  gap: 5px;
+}
+
+.inline-review-banks {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 180px;
+  align-items: center;
+  gap: 5px;
+  color: var(--cp-text-muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.inline-review-banks > svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  color: var(--cp-accent);
+}
+
+.inline-review-banks.is-mastered > svg {
+  color: var(--cp-success);
+}
+
+.inline-review-banks > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inline-review-kpis {
+  gap: 5px;
+}
+
+.inline-review-kpis > div {
+  min-width: 44px;
+  padding: 3px 6px;
+  border-radius: 7px;
+}
+
+.inline-review-kpis dt {
+  font-size: 9px;
+}
+
+.inline-review-kpis dd {
+  font-size: 12px;
+}
+
+.inline-review-actions {
+  display: flex;
+  align-self: start;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.inline-auto-toggle {
+  position: relative;
+  display: inline-flex;
+  width: 46px;
+  height: 46px;
+  flex: 0 0 46px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--cp-text);
+  cursor: pointer;
+}
+
+.inline-auto-progress {
+  position: absolute;
+  width: 46px;
+  height: 46px;
+  inset: 0;
+  overflow: visible;
+  transform: rotate(-90deg);
+}
+
+.inline-auto-track,
+.inline-auto-value {
+  fill: none;
+  stroke-width: 3;
+}
+
+.inline-auto-track {
+  stroke: var(--cp-border-strong);
+}
+
+.inline-auto-value {
+  stroke: var(--cp-accent);
+  stroke-dasharray: 100;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 100ms linear;
+}
+
+.inline-auto-toggle[aria-pressed="true"] .inline-auto-value {
+  stroke: var(--cp-text-muted);
+}
+
+.inline-auto-toggle > svg:not(.inline-auto-progress) {
+  position: relative;
+  z-index: 1;
+  width: 17px;
+  height: 17px;
+}
+
+.inline-review-next {
+  min-height: 44px;
+  white-space: nowrap;
+}
+
+.question-review-shell {
+  display: grid;
+  min-width: 0;
+}
+
+.review-question-content {
+  min-width: 0;
+}
+
+.question-review-shell .review-question-content .word-prompt-row,
+.question-review-shell .review-question-content .question-layout > .word-prompt {
+  display: none;
+}
+
+.question-review-shell .review-question-content .audio-prompt-row .sound-button,
+.question-review-shell .review-question-content .voice-settings-button,
+.question-review-shell .review-question-content .speech-error {
+  display: none;
+}
+
+.question-review-shell .review-question-content .question-layout {
+  gap: 10px;
+  padding-top: 10px;
+}
+
+.question-review-shell .review-question-content .question-kicker {
+  font-weight: 700;
+}
+
+.inline-question-review[data-coach-open="true"] + .review-question-content {
+  display: none;
 }
 
 .inline-ai-coach {
@@ -3647,7 +3848,7 @@ html[data-theme="dark"] .battle-header {
 }
 
 .inline-ai-coach .answer-ai-body {
-  max-height: 42vh;
+  max-height: 54dvh;
 }
 
 .inline-ai-sense-examples {
@@ -3687,12 +3888,92 @@ html[data-theme="dark"] .battle-header {
 }
 
 @media (max-width: 900px) {
-  .inline-review-controls {
-    grid-template-columns: minmax(0, 1fr);
+  .inline-review-toolbar {
+    grid-template-columns: max-content minmax(280px, 1fr) max-content;
+    gap: 8px 12px;
   }
 
-  .inline-review-timer {
-    grid-column: 1;
+  .inline-review-lexeme {
+    gap: 5px 8px;
+  }
+
+  .inline-review-lexeme strong {
+    font-size: clamp(34px, 5vw, 42px);
+  }
+}
+
+@media (max-width: 680px) {
+  .inline-review-toolbar {
+    grid-template-areas:
+      "coach word actions"
+      "details details details";
+    grid-template-columns: 44px minmax(0, 1fr) max-content;
+    gap: 7px 6px;
+  }
+
+  .inline-ai-toggle {
+    grid-area: coach;
+    width: 46px;
+    height: 46px;
+    justify-content: center;
+    margin-top: 0;
+    padding: 0;
+  }
+
+  .inline-ai-toggle span {
+    display: none;
+  }
+
+  .inline-review-word-summary {
+    display: contents;
+  }
+
+  .inline-review-word-main {
+    grid-area: word;
+    min-height: 46px;
+    gap: 5px;
+  }
+
+  .inline-review-audio {
+    width: 28px;
+    height: 28px;
+    flex-basis: 28px;
+  }
+
+  .inline-review-lexeme {
+    min-width: 0;
+    align-items: center;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .inline-review-lexeme strong {
+    max-width: 28vw;
+    font-size: clamp(28px, 8vw, 34px);
+  }
+
+  .inline-review-lexeme span {
+    max-width: 28vw;
+    font-size: 10px;
+  }
+
+  .inline-review-word-context {
+    grid-area: details;
+    gap: 5px;
+    padding-top: 7px;
+  }
+
+  .inline-review-banks {
+    max-width: min(100%, 150px);
+  }
+
+  .inline-review-actions {
+    grid-area: actions;
+    margin-top: 0;
+  }
+
+  .inline-review-next {
+    padding-inline: 10px;
   }
 }
 
@@ -5206,7 +5487,7 @@ html[data-theme="dark"] .battle-header {
   }
 
   .battle-action-panel {
-    width: 54%;
+    width: 100%;
     max-height: min(70vh, 620px);
   }
 

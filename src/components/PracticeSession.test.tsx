@@ -221,8 +221,13 @@ describe('PracticeSession completion actions', () => {
 
     expect(html).toContain('选择正确释义');
     expect(html).toContain('data-review-state="correct-answer"');
-    expect(html).toContain('自动前进已暂停');
+    expect(html).toContain('aria-label="继续自动计时"');
+    expect(html).toContain('inline-auto-progress');
     expect(html).toContain('AI 词汇教练');
+    expect(html).toContain('inline-review-word-summary');
+    expect(html).not.toContain('<dt>状态</dt>');
+    expect(html).not.toContain('answer-bank-note');
+    expect(html.indexOf('question-kicker')).toBeLessThan(html.indexOf('choice-grid'));
     expect(html).not.toContain('answer-columns');
   });
 
