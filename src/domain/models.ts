@@ -61,6 +61,57 @@ export interface WordExplanation {
   senseExamples: WordSenseExample[];
 }
 
+export type WordCoachSource = 'static' | 'ai';
+
+export interface WordCoachInsight {
+  wordId: string;
+  status: 'loading' | 'success' | 'error';
+  text: string;
+  senseExamples: WordSenseExample[];
+  source: WordCoachSource;
+}
+
+export interface StaticWordCoachRecord {
+  promptVersion: number;
+  sourceHash: string;
+  coachMarkdown: string;
+  senseExamples: WordSenseExample[];
+  qualityReview?: WordCoachSemanticReview;
+}
+
+export type WordCoachReviewVerdict = 'pass' | 'warning' | 'fail';
+
+export type WordCoachSemanticIssueCode =
+  | 'source_conflict'
+  | 'sense_mismatch'
+  | 'unnatural_example'
+  | 'translation_error'
+  | 'unsupported_claim'
+  | 'missing_gloss'
+  | 'misleading_usage'
+  | 'other';
+
+export interface WordCoachSemanticIssue {
+  severity: 'warning' | 'error';
+  code: WordCoachSemanticIssueCode;
+  senseIndex: number;
+  message: string;
+}
+
+export interface WordCoachSemanticReview {
+  reviewVersion: number;
+  contentHash: string;
+  verdict: WordCoachReviewVerdict;
+  issues: WordCoachSemanticIssue[];
+  model: string;
+  reviewedAt: string;
+}
+
+export interface StaticWordCoachShard {
+  schemaVersion: 1;
+  records: Record<string, StaticWordCoachRecord>;
+}
+
 export interface WordBank {
   id: BankId;
   name: string;

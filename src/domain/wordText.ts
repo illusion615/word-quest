@@ -17,7 +17,7 @@ export function primarySense(value: string, fallback = ''): string {
 export function parseDefinitionSenses(value: string): DefinitionSense[] {
   return splitDefinitionSenses(value).map((sense) => {
     const partOfSpeech = sense.match(
-      /^(adj|adv|aux|conj|int|n|num|prep|pron|vi|vt|v|a|ad)\.\s*(.+)$/i,
+      /^(adj|adv|art|aux|conj|int|n|num|prep|pron|vi|vt|v|a|ad)\.\s*(.+)$/i,
     );
     if (partOfSpeech) {
       return { label: `${partOfSpeech[1]}.`, text: partOfSpeech[2] };

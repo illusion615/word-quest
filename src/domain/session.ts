@@ -44,10 +44,6 @@ export function resolveTimeoutSubmission(
     : [false, ''];
 }
 
-export function shouldPauseAfterAnswer(correct: boolean): boolean {
-  return !correct;
-}
-
 export function createGameSession(
   queue: AdaptiveStudyItem[],
   now = Date.now(),

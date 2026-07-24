@@ -24,6 +24,7 @@ function renderPractice({
   currentItem = null,
   currentChainItems = [],
   hidePassageDuringQuestions = false,
+  autoAdvanceEnabled = true,
   autoAdvancePaused = false,
   speechSupported = false,
   enemyKind = 'grunt',
@@ -35,6 +36,7 @@ function renderPractice({
   currentItem?: AdaptiveStudyItem | null;
   currentChainItems?: AdaptiveStudyItem[];
   hidePassageDuringQuestions?: boolean;
+  autoAdvanceEnabled?: boolean;
   autoAdvancePaused?: boolean;
   speechSupported?: boolean;
   enemyKind?: 'grunt' | 'boss';
@@ -50,11 +52,13 @@ function renderPractice({
       entries={TEST_WORDS}
       remainingMs={0}
       autoAdvanceRemainingMs={0}
+      autoAdvanceEnabled={autoAdvanceEnabled}
       autoAdvancePaused={autoAdvancePaused}
       onSubmit={() => undefined}
       onStartChain={() => undefined}
       onNext={() => undefined}
       onToggleAutoAdvance={() => undefined}
+      onSetAutoAdvancePaused={() => undefined}
       onExit={() => undefined}
       levelNumber={12}
       enemyKind={enemyKind}
@@ -68,8 +72,9 @@ function renderPractice({
       completionAction={completionAction}
       onCompleteAction={() => undefined}
       sessionPreparing={false}
-      aiInsight={null}
-      onAskAi={() => undefined}
+      coachInsight={null}
+      onOpenCoach={() => undefined}
+      onRegenerateCoach={() => undefined}
       aiConfigured={false}
       missedWordIds={new Set()}
       relatedBankNames={[]}
@@ -221,9 +226,10 @@ describe('PracticeSession completion actions', () => {
 
     expect(html).toContain('选择正确释义');
     expect(html).toContain('data-review-state="correct-answer"');
-    expect(html).toContain('aria-label="继续自动计时"');
-    expect(html).toContain('inline-auto-progress');
-    expect(html).toContain('AI 词汇教练');
+    expect(html).toContain('aria-label="关闭自动下一题"');
+    expect(html).toContain('inline-review-next-progress is-enabled');
+    expect(html).not.toContain('inline-auto-toggle');
+    expect(html).toContain(`aria-label="查看 ${item.word.word} 词汇详情"`);
     expect(html).toContain('inline-review-word-summary');
     expect(html).not.toContain('<dt>状态</dt>');
     expect(html).not.toContain('answer-bank-note');
@@ -256,7 +262,9 @@ describe('PracticeSession completion actions', () => {
       speechSupported: true,
     });
 
-    expect(html).toContain('听发音，选出正确释义');
+    expect(html).toContain('听发音，选出全部正确释义');
+    expect(html.match(/选出全部正确释义/g)).toHaveLength(1);
+    expect(html).not.toContain('听发音，选出正确释义');
     expect(html).not.toContain(`<strong>${item.word.word}</strong>`);
     expect(html).toContain('aria-label="播放单词发音"');
   });

@@ -11,6 +11,8 @@ export interface MeaningOption {
   id: string;
   text: string;
   correct: boolean;
+  word: WordEntry;
+  senseIndex: number;
 }
 
 export interface WordOption {
@@ -32,8 +34,14 @@ function shuffle<T>(items: readonly T[], random: () => number): T[] {
   return out;
 }
 
-function uniqueSenses(value: string): string[] {
-  return [...new Set(splitDefinitionSenses(value).map((sense) => sense.trim()).filter(Boolean))];
+function uniqueSenses(value: string): Array<{ text: string; senseIndex: number }> {
+  const seen = new Set<string>();
+  return splitDefinitionSenses(value).flatMap((sense, senseIndex) => {
+    const text = sense.trim();
+    if (!text || seen.has(text)) return [];
+    seen.add(text);
+    return [{ text, senseIndex }];
+  });
 }
 
 function frequencyDistance(target: WordEntry, candidate: WordEntry): number {
@@ -126,9 +134,9 @@ export function buildMeaningOptions(
   const optionCount = Math.max(1, (config.optionCount ?? DEFAULT_MEANING_OPTIONS) + extraOptionCount);
   const maxCorrect = Math.max(1, config.maxCorrect ?? MAX_CORRECT_MEANINGS);
 
-  const correctTexts = uniqueSenses(word.definitionZh).slice(0, maxCorrect);
-  const seen = new Set(correctTexts);
-  const distractors: string[] = [];
+  const correctSenses = uniqueSenses(word.definitionZh).slice(0, maxCorrect);
+  const seen = new Set(correctSenses.map((sense) => sense.text));
+  const distractors: MeaningOption[] = [];
   const candidates = orderDistractorCandidates(
     word,
     pool,
@@ -137,16 +145,28 @@ export function buildMeaningOptions(
   );
   for (const candidate of candidates) {
     if (candidate.id === word.id) continue;
-    const sense = primarySense(candidate.definitionZh).trim();
-    if (!sense || seen.has(sense)) continue;
-    seen.add(sense);
-    distractors.push(sense);
+    const sense = uniqueSenses(candidate.definitionZh)[0];
+    if (!sense || seen.has(sense.text)) continue;
+    seen.add(sense.text);
+    distractors.push({
+      id: sense.text,
+      text: sense.text,
+      correct: false,
+      word: candidate,
+      senseIndex: sense.senseIndex,
+    });
   }
 
-  const distractorTexts = distractors.slice(0, Math.max(0, optionCount - correctTexts.length));
+  const selectedDistractors = distractors.slice(0, Math.max(0, optionCount - correctSenses.length));
   return shuffle([
-    ...correctTexts.map((text) => ({ id: text, text, correct: true })),
-    ...distractorTexts.map((text) => ({ id: text, text, correct: false })),
+    ...correctSenses.map(({ text, senseIndex }) => ({
+      id: text,
+      text,
+      correct: true,
+      word,
+      senseIndex,
+    })),
+    ...selectedDistractors,
   ], random);
 }
 

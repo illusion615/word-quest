@@ -7,6 +7,10 @@
     "dev": "vite",
     "data:build": "node scripts/build-exam-banks.mjs",
     "data:wordnet-pos": "node scripts/build-wordnet-pos.mjs",
+    "data:coach:generate": "node scripts/generate-word-coach.mjs",
+    "data:coach:dashboard": "node scripts/word-coach-dashboard.mjs",
+    "data:coach:verify": "node scripts/verify-word-coach.mjs",
+    "data:coach:verify:partial": "node scripts/verify-word-coach.mjs --allow-partial",
     "data:verify": "node scripts/verify-exam-banks.mjs",
     "ai:proxy": "node scripts/llm-cors-proxy.mjs",
     "assets:slice-monster": "node scripts/slice-monster-sheet.mjs",
@@ -14,10 +18,11 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint src",
     "test": "vitest run",
-    "check": "npm run lint && npm run data:verify && npm run test && npm run build",
+    "check": "npm run lint && npm run data:verify && npm run data:coach:verify:partial && npm run test && npm run build",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@fontsource/lilita-one": "^5.2.8",
     "canvas-confetti": "^1.9.4",
     "idb-keyval": "^6.3.0",
     "lucide-react": "^1.24.0",

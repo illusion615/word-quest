@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "promptVersion": 18,
+  "shardCount": 256,
+  "dictionaryCommit": "82c9872576b23118d7c42e920c11beb77f510ae2",
+  "outputLanguage": "Simplified Chinese",
+  "model": "Qwen3.6-35B-A3B-4bit",
+  "qualityMode": "unreviewed",
+  "generatedAt": "2026-07-24T13:23:16.033Z",
+  "uniqueWordCount": 11336,
+  "generatedCount": 19,
+  "blockedCount": 5,
+  "rejectedCount": 0,
+  "complete": false
+}

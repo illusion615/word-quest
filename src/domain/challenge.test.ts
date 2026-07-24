@@ -39,6 +39,13 @@ describe('buildMeaningOptions', () => {
     expect(correct).toEqual(expect.arrayContaining(['n. 银行', 'vt. 存入银行']));
     expect(options).toHaveLength(5);
     expect(options.filter((option) => !option.correct).length).toBe(3);
+    expect(options.find((option) => option.text === 'vt. 存入银行')).toMatchObject({
+      word: target,
+      senseIndex: 1,
+    });
+    expect(options.find((option) => !option.correct)).toMatchObject({
+      senseIndex: 0,
+    });
   });
 
   it('degenerates to a single correct answer for a single-sense word', () => {

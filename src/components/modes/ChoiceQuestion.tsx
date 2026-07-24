@@ -2,7 +2,9 @@ import { useMemo, useState } from 'react';
 import { buildWordOptions } from '../../domain/challenge';
 import type { WordEntry, WordProgress } from '../../domain/models';
 import { primarySense } from '../../domain/wordText';
-import { ChoiceReviewMark, resolveChoiceReviewState } from './ChoiceReviewMark';
+import { ChoiceSenseDetail } from '../ChoiceSenseDetail';
+import { resolveChoiceReviewState } from './ChoiceReviewMark';
+import { ReviewableChoice, useReviewedChoiceInspection } from './ReviewableChoice';
 
 interface ChoiceQuestionProps {
   word: WordEntry;
@@ -11,6 +13,7 @@ interface ChoiceQuestionProps {
   preferSimilarDistractors?: boolean;
   reviewed?: boolean;
   wordProgress?: WordProgress;
+  onReviewInspectionChange?: (inspecting: boolean) => void;
   onSubmit: (correct: boolean, response: string, correctAnswer: string) => void;
 }
 
@@ -21,6 +24,7 @@ export function ChoiceQuestion({
   preferSimilarDistractors = false,
   reviewed = false,
   wordProgress,
+  onReviewInspectionChange,
   onSubmit,
 }: ChoiceQuestionProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -28,6 +32,10 @@ export function ChoiceQuestion({
     extraOptionCount,
     preferSimilarDistractors,
   }), [entries, extraOptionCount, preferSimilarDistractors, word]);
+  const { inspectedId, handleChoiceClick } = useReviewedChoiceInspection({
+    reviewed,
+    onInspectionChange: onReviewInspectionChange,
+  });
 
   return (
     <div className="question-layout">
@@ -55,30 +63,25 @@ export function ChoiceQuestion({
           const selected = selectedId === option.id;
           const reviewState = resolveChoiceReviewState(option.correct, selected, reviewed);
           return (
-            <button
+            <ReviewableChoice
               key={option.id}
-              type="button"
-              className={[
-                'choice-button',
-                selected ? 'is-selected' : '',
-                reviewState ? `is-${reviewState}` : '',
-              ].filter(Boolean).join(' ')}
-              aria-pressed={selected}
-              data-review-state={reviewState ?? undefined}
-              disabled={reviewed}
-              onClick={() => {
+              index={index}
+              text={primarySense(option.word.definitionZh)}
+              correct={option.correct}
+              selected={selected}
+              reviewState={reviewState}
+              reviewed={reviewed}
+              inspecting={inspectedId === option.id}
+              onClick={() => handleChoiceClick(option.id, option.correct, () => {
                 setSelectedId(option.id);
                 onSubmit(
                   option.correct,
                   primarySense(option.word.definitionZh),
                   primarySense(word.definitionZh),
                 );
-              }}
-            >
-              <span className="choice-letter">{String.fromCharCode(65 + index)}</span>
-              <span className="choice-text">{primarySense(option.word.definitionZh)}</span>
-              <ChoiceReviewMark state={reviewState} />
-            </button>
+              })}
+              detail={<ChoiceSenseDetail word={option.word} senseIndex={0} />}
+            />
           );
         })}
       </div>

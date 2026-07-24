@@ -7,6 +7,7 @@ coverage/
 .env.*
 !.env.example
 *.tsbuildinfo
+.word-coach/
 
 # Art masters: keep large source PNGs local; commit only the optimized .webp
 # (run `npm run assets:optimize` after adding art). See src/assets/monsters/ART-SPEC.md.

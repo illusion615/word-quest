@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { Volume2 } from '../../icons';
 import type { WordEntry } from '../../domain/models';
 import { buildWordOptions } from '../../domain/challenge';
-import { ChoiceReviewMark, resolveChoiceReviewState } from './ChoiceReviewMark';
+import { ChoiceSenseDetail } from '../ChoiceSenseDetail';
+import { resolveChoiceReviewState } from './ChoiceReviewMark';
+import { ReviewableChoice, useReviewedChoiceInspection } from './ReviewableChoice';
 
 interface ListenWordQuestionProps {
   word: WordEntry;
@@ -14,6 +16,7 @@ interface ListenWordQuestionProps {
   extraOptionCount?: number;
   preferSimilarDistractors?: boolean;
   reviewed?: boolean;
+  onReviewInspectionChange?: (inspecting: boolean) => void;
   onSpeak: (text: string) => void;
   onOpenSettings: () => void;
   onSubmit: (correct: boolean, response: string, correctAnswer: string) => void;
@@ -30,6 +33,7 @@ export function ListenWordQuestion({
   extraOptionCount = 0,
   preferSimilarDistractors = false,
   reviewed = false,
+  onReviewInspectionChange,
   onSpeak,
   onOpenSettings,
   onSubmit,
@@ -39,6 +43,10 @@ export function ListenWordQuestion({
     extraOptionCount,
     preferSimilarPronunciations: preferSimilarDistractors,
   }), [entries, extraOptionCount, preferSimilarDistractors, word]);
+  const { inspectedId, handleChoiceClick } = useReviewedChoiceInspection({
+    reviewed,
+    onInspectionChange: onReviewInspectionChange,
+  });
 
   useEffect(() => {
     if (isSpeechSupported) onSpeak(word.word);
@@ -72,26 +80,21 @@ export function ListenWordQuestion({
           const selected = selectedId === option.id;
           const reviewState = resolveChoiceReviewState(option.correct, selected, reviewed);
           return (
-            <button
+            <ReviewableChoice
               key={option.id}
-              type="button"
-              className={[
-                'choice-button',
-                selected ? 'is-selected' : '',
-                reviewState ? `is-${reviewState}` : '',
-              ].filter(Boolean).join(' ')}
-              aria-pressed={selected}
-              data-review-state={reviewState ?? undefined}
-              disabled={reviewed}
-              onClick={() => {
+              index={index}
+              text={option.word.word}
+              correct={option.correct}
+              selected={selected}
+              reviewState={reviewState}
+              reviewed={reviewed}
+              inspecting={inspectedId === option.id}
+              onClick={() => handleChoiceClick(option.id, option.correct, () => {
                 setSelectedId(option.id);
                 onSubmit(option.correct, option.word.word, word.word);
-              }}
-            >
-              <span className="choice-letter">{String.fromCharCode(65 + index)}</span>
-              <span className="choice-text">{option.word.word}</span>
-              <ChoiceReviewMark state={reviewState} />
-            </button>
+              })}
+              detail={<ChoiceSenseDetail word={option.word} senseIndex={0} />}
+            />
           );
         })}
       </div>

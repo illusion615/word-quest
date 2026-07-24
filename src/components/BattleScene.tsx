@@ -20,6 +20,8 @@ interface BattleSceneProps {
   concealMonsterWords?: boolean;
   boostCount?: number;
   rosterFocusWordId?: string;
+  autoAdvanceEnabled?: boolean;
+  onToggleAutoAdvance?: () => void;
 }
 
 export function BattleScene({
@@ -37,6 +39,8 @@ export function BattleScene({
   concealMonsterWords = false,
   boostCount = 0,
   rosterFocusWordId,
+  autoAdvanceEnabled,
+  onToggleAutoAdvance,
 }: BattleSceneProps) {
   return (
     <section className={`battle-scene is-${enemyKind} ${preview ? 'is-preview' : 'is-asking'}`}>
@@ -50,6 +54,8 @@ export function BattleScene({
         title={headerTitle}
         onExit={onExit}
         boostCount={boostCount}
+        autoAdvanceEnabled={autoAdvanceEnabled}
+        onToggleAutoAdvance={onToggleAutoAdvance}
       />
       {passage && <div className="battle-passage-strip">{passage}</div>}
       <CombatHud state={state} levelNumber={levelNumber} enemyKind={enemyKind} roster={roster} onSpeak={onSpeak} disableMonsterSpeech={disableMonsterSpeech} concealWords={concealMonsterWords} focusWordId={rosterFocusWordId} />

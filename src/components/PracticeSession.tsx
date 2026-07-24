@@ -17,8 +17,8 @@ import type {
   LearningStage,
   SessionAnswer,
   WordEntry,
+  WordCoachInsight,
   WordProgress,
-  WordSenseExample,
 } from '../domain/models';
 import type { CombatState } from '../domain/combat';
 import { BOSS_QUESTION_COUNT, BOSS_STAGES, bossPassingScore } from '../domain/boss';
@@ -56,6 +56,7 @@ interface PracticeSessionProps {
   entries: WordEntry[];
   remainingMs: number;
   autoAdvanceRemainingMs: number;
+  autoAdvanceEnabled: boolean;
   autoAdvancePaused: boolean;
   onSubmit: (
     correct: boolean,
@@ -66,6 +67,7 @@ interface PracticeSessionProps {
   onStartChain: () => void;
   onNext: () => void;
   onToggleAutoAdvance: () => void;
+  onSetAutoAdvancePaused: (paused: boolean) => void;
   onExit: () => void;
   levelNumber: number;
   enemyKind: CombatEnemyKind;
@@ -79,13 +81,9 @@ interface PracticeSessionProps {
   completionAction: 'next' | 'continue' | 'finished';
   onCompleteAction: () => void;
   sessionPreparing: boolean;
-  aiInsight: {
-    wordId: string;
-    status: 'loading' | 'success' | 'error';
-    text: string;
-    senseExamples: WordSenseExample[];
-  } | null;
-  onAskAi: (word: WordEntry, pauseReview?: boolean) => void;
+  coachInsight: WordCoachInsight | null;
+  onOpenCoach: (word: WordEntry) => void;
+  onRegenerateCoach: (word: WordEntry) => void;
   aiConfigured: boolean;
   missedWordIds: Set<string>;
   relatedBankNames: string[];
@@ -132,11 +130,13 @@ export function PracticeSession({
   entries,
   remainingMs,
   autoAdvanceRemainingMs,
+  autoAdvanceEnabled,
   autoAdvancePaused,
   onSubmit,
   onStartChain,
   onNext,
   onToggleAutoAdvance,
+  onSetAutoAdvancePaused,
   onExit,
   levelNumber,
   enemyKind,
@@ -150,8 +150,9 @@ export function PracticeSession({
   completionAction,
   onCompleteAction,
   sessionPreparing,
-  aiInsight,
-  onAskAi,
+  coachInsight,
+  onOpenCoach,
+  onRegenerateCoach,
   aiConfigured,
   missedWordIds,
   relatedBankNames,
@@ -183,28 +184,26 @@ export function PracticeSession({
   const rarityIndex = useMemo(() => buildRarityIndex(entries), [entries]);
   const questionDraftRef = useRef<SessionAnswer | null>(null);
   const submittedQuestionRef = useRef<string | null>(null);
+  const reviewSurfaceOpenRef = useRef(new Set<'choice' | 'coach'>());
+  const reviewSurfacePauseOwnedRef = useRef(false);
+  const autoAdvancePausedRef = useRef(autoAdvancePaused);
+  const previousAutoAdvancePausedRef = useRef(autoAdvancePaused);
+  autoAdvancePausedRef.current = autoAdvancePaused;
   const questionKey = `${session.startedAt}:${session.index}:${currentWord?.id ?? ''}`;
-  // Once a question is answered, the vocabulary coach is generated automatically
-  // (only when a model is configured). Guarded so it fires just once per word.
-  const autoAiWordRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (session.phase !== 'answered') {
-      autoAiWordRef.current = null;
-      return;
-    }
-    if (!aiConfigured || !currentWord) return;
-    if (autoAiWordRef.current === currentWord.id) return;
-    autoAiWordRef.current = currentWord.id;
-    onAskAi(currentWord, false);
-  }, [session.phase, currentWord, aiConfigured, onAskAi]);
-  // Spacebar pauses / resumes the auto-advance countdown while reviewing.
+  // Spacebar toggles auto advance while reviewing unless a control owns the keypress.
   useEffect(() => {
     if (session.phase !== 'answered') return;
     function handleKey(event: KeyboardEvent) {
       if (event.code !== 'Space' && event.key !== ' ') return;
       const target = event.target as HTMLElement | null;
       const tag = target?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) return;
+      if (
+        tag === 'INPUT'
+        || tag === 'TEXTAREA'
+        || tag === 'BUTTON'
+        || tag === 'SELECT'
+        || target?.isContentEditable
+      ) return;
       event.preventDefault();
       onToggleAutoAdvance();
     }
@@ -215,7 +214,49 @@ export function PracticeSession({
   useEffect(() => {
     questionDraftRef.current = null;
     submittedQuestionRef.current = null;
+    reviewSurfaceOpenRef.current.clear();
+    reviewSurfacePauseOwnedRef.current = false;
   }, [questionKey]);
+
+  useEffect(() => {
+    if (
+      reviewSurfaceOpenRef.current.size > 0
+      && reviewSurfacePauseOwnedRef.current
+      && previousAutoAdvancePausedRef.current
+      && !autoAdvancePaused
+    ) {
+      reviewSurfacePauseOwnedRef.current = false;
+    }
+    previousAutoAdvancePausedRef.current = autoAdvancePaused;
+  }, [autoAdvancePaused]);
+
+  const handleReviewSurfaceChange = useCallback((
+    surface: 'choice' | 'coach',
+    open: boolean,
+  ) => {
+    const wasEmpty = reviewSurfaceOpenRef.current.size === 0;
+    if (open) reviewSurfaceOpenRef.current.add(surface);
+    else reviewSurfaceOpenRef.current.delete(surface);
+    if (open) {
+      if (wasEmpty && !autoAdvancePausedRef.current) {
+        reviewSurfacePauseOwnedRef.current = true;
+        onSetAutoAdvancePaused(true);
+      }
+      return;
+    }
+    if (reviewSurfaceOpenRef.current.size === 0 && reviewSurfacePauseOwnedRef.current) {
+      reviewSurfacePauseOwnedRef.current = false;
+      onSetAutoAdvancePaused(false);
+    }
+  }, [onSetAutoAdvancePaused]);
+
+  const handleChoiceInspectionChange = useCallback((inspecting: boolean) => {
+    handleReviewSurfaceChange('choice', inspecting);
+  }, [handleReviewSurfaceChange]);
+
+  const handleCoachOpenChange = useCallback((open: boolean) => {
+    handleReviewSurfaceChange('coach', open);
+  }, [handleReviewSurfaceChange]);
 
   const handleDraftChange = useCallback((draft: SessionAnswer | null) => {
     questionDraftRef.current = draft;
@@ -453,6 +494,8 @@ export function PracticeSession({
         concealMonsterWords={concealMonsterWords}
         boostCount={boostCount}
         rosterFocusWordId={currentWord.id}
+        autoAdvanceEnabled={autoAdvanceEnabled}
+        onToggleAutoAdvance={onToggleAutoAdvance}
       >
         <section className="question-card" aria-live="polite">
         {session.phase === 'asking' && (
@@ -477,12 +520,13 @@ export function PracticeSession({
                 word={currentWord}
                 isLastQuestion={session.index + 1 >= session.queue.length}
                 autoAdvancePercent={autoAdvancePercent}
-                autoAdvancePaused={autoAdvancePaused}
-                onToggleAutoAdvance={onToggleAutoAdvance}
+                autoAdvanceEnabled={autoAdvanceEnabled}
+                onCoachOpenChange={handleCoachOpenChange}
                 onNext={onNext}
                 aiConfigured={aiConfigured}
-                aiInsight={aiInsight}
-                onAskAi={onAskAi}
+                coachInsight={coachInsight}
+                onOpenCoach={onOpenCoach}
+                onRegenerateCoach={onRegenerateCoach}
                 relatedBankNames={relatedBankNames}
                 wordMastered={wordMastered}
                 wordProgress={currentWordProgress}
@@ -515,6 +559,7 @@ export function PracticeSession({
                 preferSimilarDistractors={preferSimilarDistractors}
                 reviewed={reviewed}
                 wordProgress={currentWordProgress}
+                onReviewInspectionChange={handleChoiceInspectionChange}
                 onSubmit={handleQuestionSubmit}
               />
             )}
@@ -548,6 +593,7 @@ export function PracticeSession({
                 preferSimilarDistractors={preferSimilarDistractors}
                 reviewed={reviewed}
                 wordProgress={currentWordProgress}
+                onReviewInspectionChange={handleChoiceInspectionChange}
               />
             )}
             {mode === 'listen-meaning' && (
@@ -564,6 +610,7 @@ export function PracticeSession({
                 extraOptionCount={extraOptionCount}
                 preferSimilarDistractors={preferSimilarDistractors}
                 reviewed={reviewed}
+                onReviewInspectionChange={handleChoiceInspectionChange}
                 audioOnly
                 speechError={speechError}
                 voiceName={speechVoiceName}
@@ -576,6 +623,7 @@ export function PracticeSession({
                 extraOptionCount={extraOptionCount}
                 preferSimilarDistractors={preferSimilarDistractors}
                 reviewed={reviewed}
+                onReviewInspectionChange={handleChoiceInspectionChange}
                 onSubmit={handleQuestionSubmit}
               />
             )}
@@ -590,6 +638,7 @@ export function PracticeSession({
                 extraOptionCount={extraOptionCount}
                 preferSimilarDistractors={preferSimilarDistractors}
                 reviewed={reviewed}
+                onReviewInspectionChange={handleChoiceInspectionChange}
                 onSpeak={onSpeak}
                 onOpenSettings={onOpenSpeechSettings}
                 onSubmit={handleQuestionSubmit}

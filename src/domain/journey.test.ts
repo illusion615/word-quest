@@ -12,6 +12,7 @@ import {
   getJourneyLevelEntries,
   levelFrequencyLabel,
   orderByFrequencyCurve,
+  orderWordsByJourney,
   resolveLevelCompletionAction,
 } from './journey';
 
@@ -133,6 +134,17 @@ describe('bank learning journey', () => {
     expect(first.every((word) => !previousIds.has(word.id))).toBe(true);
     expect(getJourneyLevelEntries(words, 2)).toHaveLength(20);
     expect(getJourneyLevelEntries(words, 3)).toEqual([]);
+  });
+
+  it('exposes the exact level order for external generation queues', () => {
+    const words = entries(70);
+    const ordered = orderWordsByJourney(words);
+
+    expect(ordered.slice(0, WORDS_PER_LEVEL).map((word) => word.id))
+      .toEqual(getJourneyLevelEntries(words, 0).map((word) => word.id));
+    expect(ordered.slice(WORDS_PER_LEVEL, WORDS_PER_LEVEL * 2).map((word) => word.id))
+      .toEqual(getJourneyLevelEntries(words, 1).map((word) => word.id));
+    expect(new Set(ordered.map((word) => word.id))).toEqual(new Set(words.map((word) => word.id)));
   });
 
   it('mixes frequency bands while shifting from common-led to rare-led levels', () => {

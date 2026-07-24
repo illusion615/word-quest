@@ -204,7 +204,7 @@ export function orderByFrequencyCurve(entries: WordEntry[]): WordEntry[] {
   return ordered;
 }
 
-function orderedByBankLevel(entries: WordEntry[], bankId?: BankId): WordEntry[] {
+export function orderWordsByJourney(entries: WordEntry[], bankId?: BankId): WordEntry[] {
   const ranked = withFrequencyMetadata(entries);
   // Bank membership already scopes the curriculum. Sub-level basics remain in
   // the common band as anchors instead of being pushed into an all-basic tail;
@@ -232,7 +232,7 @@ export function getJourneyLevelEntries(
   bankId?: BankId,
 ): WordEntry[] {
   const safeIndex = Math.max(0, Math.floor(levelIndex));
-  const orderedEntries = orderedByBankLevel(entries, bankId);
+  const orderedEntries = orderWordsByJourney(entries, bankId);
   const node = buildJourneyNodeSpecs(orderedEntries.length)[safeIndex];
   if (!node || node.kind !== 'normal' || node.normalGroupIndex === null) return [];
   const start = node.normalGroupIndex * WORDS_PER_LEVEL;
@@ -246,7 +246,7 @@ export function getBossLevelEntries(
   bankId?: BankId,
 ): WordEntry[] {
   const safeIndex = Math.max(0, Math.floor(levelIndex));
-  const orderedEntries = orderedByBankLevel(entries, bankId);
+  const orderedEntries = orderWordsByJourney(entries, bankId);
   const node = buildJourneyNodeSpecs(orderedEntries.length)[safeIndex];
   if (!node || node.kind !== 'boss') return [];
   const reviewCandidates = orderedEntries.slice(
@@ -274,7 +274,7 @@ export function buildBankJourney(
     return { chapters: [], totalLevels: 0, activeLevelIndex: null, activeChapterIndex: 0 };
   }
 
-  const orderedEntries = orderedByBankLevel(entries, bankId);
+  const orderedEntries = orderWordsByJourney(entries, bankId);
   const normalLevelCount = Math.ceil(orderedEntries.length / WORDS_PER_LEVEL);
   const nodeSpecs = buildJourneyNodeSpecs(orderedEntries.length);
   const totalLevels = nodeSpecs.length;

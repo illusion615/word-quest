@@ -10,7 +10,6 @@ import {
   replaceUnavailableListening,
   resolveModeTimeLimit,
   resolveTimeoutSubmission,
-  shouldPauseAfterAnswer,
   shuffleEntries,
   startChainGroup,
 } from './session';
@@ -62,11 +61,6 @@ describe('game session', () => {
       [{ text: '已选择的释义', status: 'incorrect' }],
     ]);
     expect(resolveTimeoutSubmission(null)).toEqual([false, '']);
-  });
-
-  it('pauses feedback after a mistake but keeps correct answers moving', () => {
-    expect(shouldPauseAfterAnswer(false)).toBe(true);
-    expect(shouldPauseAfterAnswer(true)).toBe(false);
   });
 
   it('moves from asking to answered to the next question', () => {

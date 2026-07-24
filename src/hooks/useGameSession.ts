@@ -15,7 +15,6 @@ import {
   createGameSession,
   replaceUnavailableListening,
   resolveModeTimeLimit,
-  shouldPauseAfterAnswer,
   startChainGroup,
   type ResolvedAnswerEvent,
 } from '../domain/session';
@@ -36,6 +35,7 @@ export function useGameSession(
   const [session, setSession] = useState<GameSessionState | null>(null);
   const [now, setNow] = useState(Date.now());
   const [autoAdvanceRemainingMs, setAutoAdvanceRemainingMs] = useState(AUTO_ADVANCE_DELAY_MS);
+  const [autoAdvanceEnabled, setAutoAdvanceEnabled] = useState(true);
   const [autoAdvancePaused, setAutoAdvancePaused] = useState(false);
   const [assessmentWordIds, setAssessmentWordIds] = useState<Set<string>>(() => new Set());
   const submittedQuestionRef = useRef<string | null>(null);
@@ -132,7 +132,7 @@ export function useGameSession(
       ...(choiceFeedback ? { choiceFeedback } : {}),
     }));
     setAutoAdvanceRemainingMs(AUTO_ADVANCE_DELAY_MS);
-    setAutoAdvancePaused(shouldPauseAfterAnswer(correct));
+    setAutoAdvancePaused(false);
   }, [applyRuntimeOverrides, onAnswerResolved, onRecord, session, timeScale]);
 
   const nextQuestion = useCallback(() => {
@@ -158,7 +158,9 @@ export function useGameSession(
   }, [session]);
 
   useEffect(() => {
-    if (!session || session.phase !== 'answered' || autoAdvancePaused) return undefined;
+    if (!session || session.phase !== 'answered' || !autoAdvanceEnabled || autoAdvancePaused) {
+      return undefined;
+    }
 
     const deadline = Date.now() + autoAdvanceRemainingMs;
     const interval = window.setInterval(() => {
@@ -171,14 +173,18 @@ export function useGameSession(
     }, 100);
 
     return () => window.clearInterval(interval);
-  }, [autoAdvancePaused, nextQuestion, session?.index, session?.phase]);
+  }, [autoAdvanceEnabled, autoAdvancePaused, nextQuestion, session?.index, session?.phase]);
 
   const pauseAutoAdvance = useCallback(() => {
     setAutoAdvancePaused(true);
   }, []);
 
   const toggleAutoAdvance = useCallback(() => {
-    setAutoAdvancePaused((paused) => !paused);
+    setAutoAdvanceEnabled((enabled) => !enabled);
+  }, []);
+
+  const setAutoAdvancePause = useCallback((paused: boolean) => {
+    setAutoAdvancePaused(paused);
   }, []);
 
   const toggleWordAssessment = useCallback((wordId: string) => {
@@ -223,6 +229,7 @@ export function useGameSession(
     currentWord,
     remainingMs,
     autoAdvanceRemainingMs,
+    autoAdvanceEnabled,
     autoAdvancePaused,
     assessmentWordIds,
     missedWordIds,
@@ -232,6 +239,7 @@ export function useGameSession(
     nextQuestion,
     pauseAutoAdvance,
     toggleAutoAdvance,
+    setAutoAdvancePause,
     toggleWordAssessment,
     finishSession,
     stopSession,

@@ -8,7 +8,9 @@ import {
   correctMeaningIds,
   gradeMeaningSelection,
 } from '../../domain/challenge';
-import { ChoiceReviewMark, resolveChoiceReviewState } from './ChoiceReviewMark';
+import { ChoiceSenseDetail } from '../ChoiceSenseDetail';
+import { resolveChoiceReviewState } from './ChoiceReviewMark';
+import { ReviewableChoice, useReviewedChoiceInspection } from './ReviewableChoice';
 
 interface MatchMeaningQuestionProps {
   word: WordEntry;
@@ -29,6 +31,7 @@ interface MatchMeaningQuestionProps {
   preferSimilarDistractors?: boolean;
   reviewed?: boolean;
   wordProgress?: WordProgress;
+  onReviewInspectionChange?: (inspecting: boolean) => void;
   audioOnly?: boolean;
   speechError?: string;
   voiceName?: string;
@@ -52,6 +55,7 @@ export function MatchMeaningQuestion({
   preferSimilarDistractors = false,
   reviewed = false,
   wordProgress,
+  onReviewInspectionChange,
   audioOnly = false,
   speechError = '',
   voiceName = '自动选择',
@@ -61,6 +65,10 @@ export function MatchMeaningQuestion({
     preferSimilarDistractors,
   }), [entries, extraOptionCount, preferSimilarDistractors, word]);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const { inspectedId, handleChoiceClick } = useReviewedChoiceInspection({
+    reviewed,
+    onInspectionChange: onReviewInspectionChange,
+  });
 
   useEffect(() => {
     setSelected(new Set());
@@ -87,7 +95,6 @@ export function MatchMeaningQuestion({
   }
 
   function toggle(id: string) {
-    if (reviewed) return;
     const next = new Set(selected);
     if (next.has(id)) next.delete(id);
     else next.add(id);
@@ -106,6 +113,9 @@ export function MatchMeaningQuestion({
   }
 
   const correctCount = correctMeaningIds(options).length;
+  const meaningPrompt = hideAnswerCount
+    ? '选出全部正确释义'
+    : `选出全部正确释义（共 ${correctCount} 项）`;
 
   return (
     <div className="question-layout">
@@ -121,7 +131,7 @@ export function MatchMeaningQuestion({
             >
               <Volume2 aria-hidden="true" />
             </button>
-            <p className="question-kicker">听发音，选出正确释义</p>
+            <p className="question-kicker">听发音，{meaningPrompt}</p>
           </div>
           {onOpenSettings && (
             <button type="button" className="voice-settings-button" onClick={onOpenSettings}>
@@ -162,11 +172,7 @@ export function MatchMeaningQuestion({
           )}
         </div>
       )}
-      <p className="question-kicker">
-        {hideAnswerCount
-          ? '选出全部正确释义'
-          : `选出全部正确释义（共 ${correctCount} 项）`}
-      </p>
+      {!audioOnly && <p className="question-kicker">{meaningPrompt}</p>}
       <div
         className="choice-grid"
         role="group"
@@ -177,23 +183,18 @@ export function MatchMeaningQuestion({
           const selectedOption = selected.has(option.id);
           const reviewState = resolveChoiceReviewState(option.correct, selectedOption, reviewed);
           return (
-            <button
+            <ReviewableChoice
               key={option.id}
-              type="button"
-              className={[
-                'choice-button',
-                selectedOption ? 'is-selected' : '',
-                reviewState ? `is-${reviewState}` : '',
-              ].filter(Boolean).join(' ')}
-              aria-pressed={selectedOption}
-              data-review-state={reviewState ?? undefined}
-              onClick={() => toggle(option.id)}
-              disabled={reviewed}
-            >
-              <span className="choice-letter">{String.fromCharCode(65 + index)}</span>
-              <span className="choice-text">{option.text}</span>
-              <ChoiceReviewMark state={reviewState} />
-            </button>
+              index={index}
+              text={option.text}
+              correct={option.correct}
+              selected={selectedOption}
+              reviewState={reviewState}
+              reviewed={reviewed}
+              inspecting={inspectedId === option.id}
+              onClick={() => handleChoiceClick(option.id, option.correct, () => toggle(option.id))}
+              detail={<ChoiceSenseDetail word={option.word} senseIndex={option.senseIndex} />}
+            />
           );
         })}
       </div>

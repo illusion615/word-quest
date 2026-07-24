@@ -10,6 +10,7 @@ import { PracticeSession } from './components/PracticeSession';
 import { ChallengePrep } from './components/ChallengePrep';
 import { SpeechSettingsDialog } from './components/SpeechSettingsDialog';
 import { WORD_BANKS } from './data/bankRepository';
+import { loadStaticWordExplanation } from './data/wordCoachRepository';
 import {
   DEFAULT_CHAIN_COUNT,
   buildClearanceReview,
@@ -29,8 +30,8 @@ import { getClearedLevelNumberSet } from './domain/gameProgress';
 import type {
   AdaptiveStudyItem,
   BankId,
+  WordCoachInsight,
   WordEntry,
-  WordSenseExample,
 } from './domain/models';
 import type { ChallengeDifficulty } from './domain/progress';
 import {
@@ -64,13 +65,6 @@ const THEME_COLORS: Record<Theme, string> = {
   light: '#fdefd6',
   dark: '#171531',
 };
-
-interface AiInsight {
-  wordId: string;
-  status: 'loading' | 'success' | 'error';
-  text: string;
-  senseExamples: WordSenseExample[];
-}
 
 function currentTheme(): Theme {
   return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
@@ -126,10 +120,10 @@ export default function WordBuddyApp() {
   const [speechSettingsOpen, setSpeechSettingsOpen] = useState(false);
   const [sessionPreparing, setSessionPreparing] = useState(false);
   const [pendingAiWord, setPendingAiWord] = useState<WordEntry | null>(null);
-  const [aiInsight, setAiInsight] = useState<AiInsight | null>(null);
+  const [coachInsight, setCoachInsight] = useState<WordCoachInsight | null>(null);
   const preparationIdRef = useRef(0);
   const challengeLevelIndexRef = useRef<number | null>(null);
-  const clearAiInsight = useCallback(() => setAiInsight(null), []);
+  const clearCoachInsight = useCallback(() => setCoachInsight(null), []);
   const {
     learningState,
     stats,
@@ -173,6 +167,7 @@ export default function WordBuddyApp() {
     currentWord,
     remainingMs,
     autoAdvanceRemainingMs,
+    autoAdvanceEnabled,
     autoAdvancePaused,
     startSession,
     startChain,
@@ -180,11 +175,12 @@ export default function WordBuddyApp() {
     nextQuestion,
     pauseAutoAdvance,
     toggleAutoAdvance,
+    setAutoAdvancePause,
     stopSession,
     missedWordIds,
   } = useGameSession(
     addAnswer,
-    clearAiInsight,
+    clearCoachInsight,
     combat.resolveAnswer,
     speech.isPlaybackAvailable,
     boostFx.timeScale,
@@ -275,7 +271,7 @@ export default function WordBuddyApp() {
     const preparationId = preparationIdRef.current + 1;
     preparationIdRef.current = preparationId;
     setSessionPreparing(true);
-    setAiInsight(null);
+    setCoachInsight(null);
 
     const challengeLevelIndex = levelIndex ?? challengeLevelIndexRef.current ?? 0;
     const activeLevel = selectedJourney.chapters
@@ -425,28 +421,74 @@ export default function WordBuddyApp() {
     setTheme(nextTheme);
   }
 
-  async function runAiExplanation(word: WordEntry, override?: AiConnectionConfig) {
-    setAiInsight({ wordId: word.id, status: 'loading', text: '', senseExamples: [] });
+  async function runStaticExplanation(word: WordEntry) {
+    setCoachInsight({
+      wordId: word.id,
+      status: 'loading',
+      text: '',
+      senseExamples: [],
+      source: 'static',
+    });
     try {
-      const explanation = await requestExplanation(word, override);
-      setAiInsight({
+      const explanation = await loadStaticWordExplanation(word);
+      setCoachInsight(explanation ? {
         wordId: word.id,
         status: 'success',
         text: explanation.markdown,
         senseExamples: explanation.senseExamples,
-      });
-    } catch (error) {
-      setAiInsight({
+        source: 'static',
+      } : {
         wordId: word.id,
         status: 'error',
-        text: error instanceof Error ? error.message : 'AI 讲解请求失败。',
+        text: '该词的预生成讲解尚未收录。',
         senseExamples: [],
+        source: 'static',
+      });
+    } catch (error) {
+      setCoachInsight({
+        wordId: word.id,
+        status: 'error',
+        text: error instanceof Error ? error.message : '词库讲解加载失败。',
+        senseExamples: [],
+        source: 'static',
       });
     }
   }
 
-  function handleAiRequest(word: WordEntry, pauseReview = true) {
-    if (pauseReview) pauseAutoAdvance();
+  async function runAiExplanation(word: WordEntry, override?: AiConnectionConfig) {
+    setCoachInsight({
+      wordId: word.id,
+      status: 'loading',
+      text: '',
+      senseExamples: [],
+      source: 'ai',
+    });
+    try {
+      const explanation = await requestExplanation(word, override);
+      setCoachInsight({
+        wordId: word.id,
+        status: 'success',
+        text: explanation.markdown,
+        senseExamples: explanation.senseExamples,
+        source: 'ai',
+      });
+    } catch (error) {
+      setCoachInsight({
+        wordId: word.id,
+        status: 'error',
+        text: error instanceof Error ? error.message : 'AI 讲解请求失败。',
+        senseExamples: [],
+        source: 'ai',
+      });
+    }
+  }
+
+  function handleOpenCoach(word: WordEntry) {
+    void runStaticExplanation(word);
+  }
+
+  function handleRegenerateCoach(word: WordEntry) {
+    pauseAutoAdvance();
     if (!aiConfigured) {
       setPendingAiWord(word);
       setSettingsOpen(true);
@@ -473,7 +515,7 @@ export default function WordBuddyApp() {
   function handleStopSession() {
     preparationIdRef.current += 1;
     setSessionPreparing(false);
-    setAiInsight(null);
+    setCoachInsight(null);
     speech.stop();
     combat.resetCombat();
     stopSession();
@@ -583,11 +625,13 @@ export default function WordBuddyApp() {
           entries={selectedEntries}
           remainingMs={remainingMs}
           autoAdvanceRemainingMs={autoAdvanceRemainingMs}
+          autoAdvanceEnabled={autoAdvanceEnabled}
           autoAdvancePaused={autoAdvancePaused}
           onSubmit={submitAnswer}
           onStartChain={startChain}
           onNext={nextQuestion}
           onToggleAutoAdvance={toggleAutoAdvance}
+          onSetAutoAdvancePaused={setAutoAdvancePause}
           onExit={handleStopSession}
           levelNumber={challengeLevelIndex + 1}
           enemyKind={challengeLevel?.kind === 'boss' ? 'boss' : 'grunt'}
@@ -601,8 +645,9 @@ export default function WordBuddyApp() {
           completionAction={completionAction}
           onCompleteAction={handleLevelCompleteAction}
           sessionPreparing={sessionPreparing}
-          aiInsight={aiInsight}
-          onAskAi={handleAiRequest}
+          coachInsight={coachInsight}
+          onOpenCoach={handleOpenCoach}
+          onRegenerateCoach={handleRegenerateCoach}
           aiConfigured={aiConfigured}
           missedWordIds={missedWordIds}
           relatedBankNames={currentWordBankNames}

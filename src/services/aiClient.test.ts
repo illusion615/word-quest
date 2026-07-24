@@ -1,16 +1,21 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   DEFAULT_AI_CONFIG,
+  evaluateWordExplanation,
   explainWord,
   generateChainReading,
   parseChainReading,
   parseWordExplanation,
+  parseWordExplanationQualityReview,
   requestCompletion,
   resolveCompletionUrl,
+  sentenceUsesTargetWord,
+  wordExplanationMaxTokens,
 } from './aiClient';
 import { TEST_WORDS } from '../test/fixtures/words';
 import type { ChainBlueprint, WordBankManifest, WordEntry } from '../domain/models';
 import { SENTENCE_LEVEL_POLICIES } from '../domain/sentencePolicy';
+import { parseDefinitionSenses } from '../domain/wordText';
 
 const GAOKAO_BANK: WordBankManifest = {
   id: 'gaokao',
@@ -71,7 +76,45 @@ function aiResponse(content: string): Response {
   });
 }
 
+function structuredExplanation(senseCount: number, targetWord = 'perfect') {
+  return {
+    labels: {
+      memoryHook: '記憶フック',
+      senseMap: '意味マップ',
+      usageGuide: '使い方の注意',
+      pattern: '型',
+      senseContrast: '意味の対比',
+      commonConfusion: 'よくある混同',
+      caution: '注意',
+    },
+    memoryHook: '結果が整う場面と、そこへ磨き上げる動作を一つの映像で覚えます。',
+    senses: Array.from({ length: senseCount }, (_, senseIndex) => ({
+      sourceStatus: 'standard',
+      distinction: `この語義 ${senseIndex + 1} の使い分けです。`,
+      pattern: `perfect pattern ${senseIndex + 1}`,
+      englishSentence: `This example uses ${targetWord} in sense ${senseIndex + 1}.`,
+      localizedTranslation: `これは語義 ${senseIndex + 1} の例です。`,
+    })),
+    senseContrast: '品詞と文脈で意味を選びます。',
+    commonConfusion: '似た語との違いを確認します。',
+    caution: '自然な語順と搭配を使います。',
+  };
+}
+
 describe('AI client', () => {
+  it('reserves more output space only for highly polysemous words', () => {
+    expect(wordExplanationMaxTokens(4)).toBe(2400);
+    expect(wordExplanationMaxTokens(16)).toBe(6000);
+    expect(wordExplanationMaxTokens(100)).toBe(6000);
+  });
+  it('accepts common inflections but not unrelated prefix words', () => {
+    expect(sentenceUsesTargetWord('She cleared the table.', 'clear')).toBe(true);
+    expect(sentenceUsesTargetWord('The snakes moved quietly.', 'snake')).toBe(true);
+    expect(sentenceUsesTargetWord('The runner is running.', 'run')).toBe(true);
+    expect(sentenceUsesTargetWord('She is ready.', 'be')).toBe(true);
+    expect(sentenceUsesTargetWord('Candy is sweet.', 'can')).toBe(false);
+    expect(sentenceUsesTargetWord('This sentence omits it.', 'clear')).toBe(false);
+  });
   it('adds the chat completions path to a base URL', () => {
     expect(resolveCompletionUrl('https://api.example.com/v1'))
       .toBe('https://api.example.com/v1/chat/completions');
@@ -99,17 +142,7 @@ describe('AI client', () => {
   });
 
   it('requests structured coaching and per-sense examples in the selected output language', async () => {
-    const explanation = {
-      coachMarkdown: '### Memory cue\n\n**Perfect** can describe a result or the act of improving it.',
-      senseExamples: [
-        { language: 'zh', senseIndex: 0, sentence: 'The present perfect connects a past action to the present.', translation: '現在完了形は過去の動作を現在につなげます。' },
-        { language: 'zh', senseIndex: 1, sentence: 'Her pronunciation is nearly perfect.', translation: '彼女の発音はほぼ完璧です。' },
-        { language: 'zh', senseIndex: 2, sentence: 'She perfected the design before launch.', translation: '彼女は発売前に設計を完成させました。' },
-        { language: 'en', senseIndex: 0, sentence: 'Daily practice perfected his technique.', translation: '毎日の練習が彼の技術を完成させました。' },
-        { language: 'en', senseIndex: 1, sentence: 'This is a perfect solution.', translation: 'これは完璧な解決策です。' },
-        { language: 'en', senseIndex: 2, sentence: 'The copy is a perfect match.', translation: 'そのコピーは完全に一致しています。' },
-      ],
-    };
+    const explanation = structuredExplanation(3);
     const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
       choices: [{ message: { content: JSON.stringify(explanation) } }],
     }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
@@ -124,57 +157,236 @@ describe('AI client', () => {
       const request = fetcher.mock.calls[0][1];
       const body = JSON.parse(String(request?.body));
       const systemPrompt = body.messages[0].content;
-      expect(systemPrompt).toContain('GitHub-flavored Markdown');
-      expect(systemPrompt).toContain('exactly three level-3');
-      expect(systemPrompt).toContain('raw HTML');
-      expect(systemPrompt).toContain('exactly one item for EVERY supplied Chinese sense');
-      expect(systemPrompt).toContain('Never combine multiple senses in one item');
-      expect(systemPrompt).toContain('do not leave a leading space inside the bold text');
-      expect(systemPrompt).toContain('exactly three flat unordered-list items');
-      expect(systemPrompt).toContain('Every list marker must begin at the start of a new line');
-      expect(systemPrompt).toContain('do not repeat example sentences');
+      expect(systemPrompt).toContain('unmistakable productive affix visibly attached');
+      expect(systemPrompt).toContain('one flat JSON object');
+      expect(systemPrompt).toContain('exactly one object for each index');
+      expect(systemPrompt).toContain('SAME object is mandatory');
+      expect(systemPrompt).toContain('do not create a separate senseExamples array');
+      expect(systemPrompt).toContain('array position is authoritative');
+      expect(systemPrompt).toContain('glossChecklist');
+      expect(systemPrompt).toContain('dangling lead-in');
+      expect(systemPrompt).toContain('never claim that a word "comes from"');
+      expect(systemPrompt).toContain('do not include phonetic transcription');
+      expect(systemPrompt).toContain('plain text without Markdown or HTML');
       expect(systemPrompt).toContain('grammar or technical term');
       expect(systemPrompt).toContain('standard form or pattern');
       expect(systemPrompt).toContain('common mistake or limitation');
-      expect(systemPrompt).toContain('changes pronunciation or stress');
-      expect(systemPrompt).toContain('exact part of speech');
+      expect(systemPrompt).toContain('aligned to requiredSenseIndexes[i]');
+      expect(systemPrompt).toContain('verb complementation, transitivity, articles');
+      expect(systemPrompt).toContain('enjoys birding');
+      expect(systemPrompt).toContain('compare the result character by character');
+      expect(systemPrompt).toContain('Never substitute a noun meaning into a verb item');
+      expect(systemPrompt).toContain('never propose a root, prefix, or suffix analysis for an opaque word');
+      expect(systemPrompt).toContain('do not include phonetic transcription');
       expect(systemPrompt).toContain('Respond in Japanese.');
       const userPayload = JSON.parse(body.messages[1].content);
       expect(userPayload.chineseSenses.map((sense: { label: string }) => sense.label))
         .toEqual(['n.', 'a.', 'vt.']);
-      expect(body.response_format.json_schema.name).toBe('wordbuddy_word_explanation');
-      expect(result.markdown).toContain('Memory cue');
-      expect(result.senseExamples).toHaveLength(6);
+      expect(body.response_format).toEqual({ type: 'json_object' });
+      expect(userPayload.requiredSenseCount).toBe(3);
+      expect(userPayload.requiredSenseIndexes).toEqual([0, 1, 2]);
+      expect(userPayload.chineseSenses[1].glossChecklist).toEqual(['完美的', '完好的', '理想的']);
+      expect(result.markdown).toContain('### 記憶フック');
+      expect(result.markdown.match(/^- \*\*/gm)).toHaveLength(6);
+      expect(result.senseExamples).toHaveLength(3);
     } finally {
       vi.unstubAllGlobals();
     }
   });
 
   it('rejects a word explanation that misses a displayed sense', () => {
-    const content = JSON.stringify({
-      coachMarkdown: '### 记忆\n\n提示',
-      senseExamples: [
-        { language: 'zh', senseIndex: 0, sentence: 'She achieved her goal.', translation: '她实现了目标。' },
-      ],
-    });
+    const explanation = structuredExplanation(2);
+    explanation.senses[1].englishSentence = '';
 
-    expect(() => parseWordExplanation(content, 2, 1))
+    expect(() => parseWordExplanation(
+      JSON.stringify(explanation),
+      parseDefinitionSenses('v. 实现；n. 成就'),
+      'perfect',
+    ))
       .toThrow('AI 未给出中文第 2 个义项的例句');
   });
 
-  it('ignores additional examples outside the supplied sense indexes', () => {
-    const content = JSON.stringify({
-      coachMarkdown: '### 记忆\n\n提示',
-      senseExamples: [
-        { language: 'zh', senseIndex: 0, sentence: 'She achieved her goal.', translation: '她实现了目标。' },
-        { language: 'en', senseIndex: 0, sentence: 'Practice helps you achieve more.', translation: '练习帮助你取得更多成果。' },
-        { language: 'zh', senseIndex: 99, sentence: 'An extra generic example.', translation: '一条额外的通用例句。' },
-      ],
+  it('rejects additional sense objects outside the supplied indexes', () => {
+    const explanation = structuredExplanation(1);
+    explanation.senses.push({
+      sourceStatus: 'standard',
+      distinction: '追加の意味です。',
+      pattern: 'extra pattern',
+      englishSentence: 'An extra generic example.',
+      localizedTranslation: '一条额外的通用例句。',
     });
 
-    const result = parseWordExplanation(content, 1, 1);
-    expect(result.senseExamples).toHaveLength(2);
-    expect(result.senseExamples.some((example) => example.senseIndex === 99)).toBe(false);
+    expect(() => parseWordExplanation(
+      JSON.stringify(explanation),
+      parseDefinitionSenses('v. 实现'),
+      'perfect',
+    )).toThrow('义项讲解数量不正确');
+  });
+
+  it('rejects a mismatched number of structured sense notes', () => {
+    const explanation = structuredExplanation(2);
+    explanation.senses.pop();
+    expect(() => parseWordExplanation(
+      JSON.stringify(explanation),
+      parseDefinitionSenses('v. 实现；n. 成就'),
+      'perfect',
+    )).toThrow('义项讲解数量不正确');
+  });
+
+  it('rejects raw HTML in a structured coach field', () => {
+    const explanation = structuredExplanation(1);
+    explanation.memoryHook = '<p>不支持</p>';
+    expect(() => parseWordExplanation(
+      JSON.stringify(explanation),
+      parseDefinitionSenses('v. 实现'),
+      'perfect',
+    )).toThrow('必须是纯文本');
+  });
+
+  it('rejects a translated sentence placed in the English example field', () => {
+    const explanation = structuredExplanation(1);
+    explanation.senses[0].englishSentence = '这个句子使用了 perfect。';
+    expect(() => parseWordExplanation(
+      JSON.stringify(explanation),
+      parseDefinitionSenses('a. 完美的'),
+      'perfect',
+    )).toThrow('AI 为中文第 1 个义项返回的不是英文例句');
+  });
+
+  it('rejects an example that omits the target spelling', () => {
+    const explanation = structuredExplanation(1);
+    explanation.senses[0].englishSentence = 'This result has no defects at all.';
+    expect(() => parseWordExplanation(
+      JSON.stringify(explanation),
+      parseDefinitionSenses('a. 完美的'),
+      'perfect',
+    )).toThrow('AI 为中文第 1 个义项的例句未使用目标词');
+  });
+
+  it('assembles localized labels and emphasis deterministically', () => {
+    const explanation = structuredExplanation(1);
+    const markdown = parseWordExplanation(
+      JSON.stringify(explanation),
+      parseDefinitionSenses('a. 完美的'),
+      'perfect',
+    ).markdown;
+    expect(markdown).toContain('### 記憶フック');
+    expect(markdown).toContain('**a. 完美的**');
+    expect(markdown.match(/^- \*\*/gm)).toHaveLength(4);
+  });
+
+  it('replaces a misspelled letter-by-letter mnemonic with a safe scene hook', () => {
+    const explanation = structuredExplanation(1, 'bird');
+    explanation.memoryHook = '把 bird 记成 B-E-D。';
+
+    expect(parseWordExplanation(
+      JSON.stringify(explanation),
+      parseDefinitionSenses('n. 鸟'),
+      'bird',
+    ).markdown).toContain('把 “bird” 和「鸟」放进一个清晰、具体的场景中记忆。');
+  });
+
+  it('rejects a target-word collocation used as a generic section label', () => {
+    const explanation = structuredExplanation(1, 'bird');
+    explanation.labels.pattern = 'go birding';
+
+    expect(() => parseWordExplanation(
+      JSON.stringify(explanation),
+      parseDefinitionSenses('n. 鸟'),
+      'bird',
+    )).toThrow('栏目标签必须是简短、通用且互不重复');
+  });
+
+  it('replaces pronunciation advice with a safe scene hook', () => {
+    const explanation = structuredExplanation(1, 'the');
+    explanation.memoryHook = 'the 在元音前读 /ðiː/。';
+
+    expect(parseWordExplanation(
+      JSON.stringify(explanation),
+      parseDefinitionSenses('art. 那'),
+      'the',
+    ).markdown).toContain('把 “the” 和「那」放进一个清晰、具体的场景中记忆。');
+  });
+
+  it('replaces invented morphology for an opaque word with a safe scene hook', () => {
+    const explanation = structuredExplanation(1, 'rigid');
+    explanation.memoryHook = '词根 rig- 表示坚硬。';
+
+    expect(parseWordExplanation(
+      JSON.stringify(explanation),
+      parseDefinitionSenses('a. 坚硬的'),
+      'rigid',
+    ).markdown).toContain('把 “rigid” 和「坚硬的」放进一个清晰、具体的场景中记忆。');
+  });
+
+  it('requires a metalinguistic correction example for a questionable source sense', () => {
+    const explanation = structuredExplanation(1, 'be');
+    explanation.senses[0].sourceStatus = 'questionable';
+    explanation.senses[0].englishSentence = 'The system uses BE mode for storage.';
+
+    expect(() => parseWordExplanation(
+      JSON.stringify(explanation),
+      parseDefinitionSenses('[计] 后端'),
+      'be',
+    )).toThrow('提供了误导性的实例');
+  });
+
+  it('rejects a usage note ending with a dangling example lead-in', () => {
+    const explanation = structuredExplanation(1);
+    explanation.commonConfusion = '学习者经常错误地说：';
+
+    expect(() => parseWordExplanation(
+      JSON.stringify(explanation),
+      parseDefinitionSenses('a. 完美的'),
+      'perfect',
+    )).toThrow('以未完成的举例引导语结束');
+  });
+
+  it('requests a strict semantic review against indexed dictionary senses', async () => {
+    const review = {
+      verdict: 'warning',
+      issues: [{
+        severity: 'warning',
+        code: 'unsupported_claim',
+        senseIndex: -1,
+        message: '记忆钩子中的词源说法需要核实。',
+      }],
+    };
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => (
+      aiResponse(JSON.stringify(review))
+    ));
+    vi.stubGlobal('fetch', fetcher);
+    try {
+      const result = await evaluateWordExplanation(AI_CONFIG, PERFECT_WORD, {
+        markdown: '### 记忆\n\n测试。\n\n### 义项\n\n- 测试\n\n### 提醒\n\n- 测试',
+        senseExamples: structuredExplanation(3).senses.map((example, senseIndex) => ({
+          language: 'zh',
+          senseIndex,
+          sentence: example.englishSentence,
+          translation: example.localizedTranslation,
+        })),
+      });
+      const body = JSON.parse(String(fetcher.mock.calls[0][1]?.body));
+      expect(body.temperature).toBe(0);
+      expect(body.response_format).toEqual({ type: 'json_object' });
+      expect(body.messages[0].content).toContain('strict but fair');
+      expect(body.messages[0].content).toContain('comma-separated glosses may be summarized');
+      expect(result).toEqual(review);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('rejects a semantic-review verdict that contradicts its issues', () => {
+    expect(() => parseWordExplanationQualityReview(JSON.stringify({
+      verdict: 'pass',
+      issues: [{
+        severity: 'warning',
+        code: 'other',
+        senseIndex: -1,
+        message: '不应出现在 pass 中。',
+      }],
+    }), 1)).toThrow('审校结论与问题列表不一致');
   });
 
   it('generates a natural reading and reports the words it used', async () => {
