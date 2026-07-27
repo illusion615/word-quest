@@ -1,15 +1,17 @@
 {
   "schemaVersion": 1,
-  "promptVersion": 18,
+  "promptVersion": 22,
   "shardCount": 256,
-  "dictionaryCommit": "82c9872576b23118d7c42e920c11beb77f510ae2",
+  "lexiconSchemaVersion": 3,
+  "dictionarySource": {
+    "bundleIdentifier": "com.apple.dictionary.zh_CN-en.OCD",
+    "bundleVersion": "1.1",
+    "contentCopyright": "Copyright © 2010, 2025 Oxford University Press and Foreign Language Teaching and Research Publishing Co., Ltd."
+  },
   "outputLanguage": "Simplified Chinese",
   "model": "Qwen3.6-35B-A3B-4bit",
-  "qualityMode": "unreviewed",
-  "generatedAt": "2026-07-24T13:23:16.033Z",
-  "uniqueWordCount": 11336,
-  "generatedCount": 19,
-  "blockedCount": 5,
-  "rejectedCount": 0,
+  "generatedAt": "2026-07-27T00:16:38.007Z",
+  "uniqueWordCount": 10498,
+  "generatedCount": 858,
   "complete": false
 }

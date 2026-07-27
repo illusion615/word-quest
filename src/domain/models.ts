@@ -37,6 +37,10 @@ export interface WordEntry {
   partOfSpeech: string;
   definition: string;
   definitionZh: string;
+  /** Stable IDs aligned with definitionZh sense order. */
+  senseIds?: string[];
+  /** Hash of the authoritative structured dictionary senses and examples. */
+  lexicalSourceHash?: string;
   example?: string;
   exampleZh?: string;
   banks: BankId[];
@@ -56,9 +60,46 @@ export interface WordSenseExample {
   translation: string;
 }
 
+export interface WordSenseLearningContent {
+  senseId: string;
+  mnemonic: string;
+  example: string;
+  translation: string;
+  usageTip: string;
+  /** Whether the example comes from the dictionary or was generated to fill a gap. */
+  exampleSource?: 'dictionary' | 'ai';
+}
+
+export interface DictionarySenseExample {
+  english: string;
+  chinese: string;
+}
+
+export interface DictionarySense {
+  id: string;
+  label: string;
+  definitionZh: string;
+  glossesEn?: string[];
+  registers?: string[];
+  domains?: string[];
+  contexts?: string[];
+  patterns?: string[];
+  examples?: DictionarySenseExample[];
+}
+
+export interface DictionaryWordSenses {
+  senses: DictionarySense[];
+}
+
+export interface DictionarySenseShard {
+  schemaVersion: 1;
+  words: Record<string, DictionaryWordSenses>;
+}
+
 export interface WordExplanation {
   markdown: string;
   senseExamples: WordSenseExample[];
+  senseContent?: Record<string, WordSenseLearningContent>;
 }
 
 export type WordCoachSource = 'static' | 'ai';
@@ -68,6 +109,7 @@ export interface WordCoachInsight {
   status: 'loading' | 'success' | 'error';
   text: string;
   senseExamples: WordSenseExample[];
+  senseContent?: Record<string, WordSenseLearningContent>;
   source: WordCoachSource;
 }
 
@@ -76,35 +118,7 @@ export interface StaticWordCoachRecord {
   sourceHash: string;
   coachMarkdown: string;
   senseExamples: WordSenseExample[];
-  qualityReview?: WordCoachSemanticReview;
-}
-
-export type WordCoachReviewVerdict = 'pass' | 'warning' | 'fail';
-
-export type WordCoachSemanticIssueCode =
-  | 'source_conflict'
-  | 'sense_mismatch'
-  | 'unnatural_example'
-  | 'translation_error'
-  | 'unsupported_claim'
-  | 'missing_gloss'
-  | 'misleading_usage'
-  | 'other';
-
-export interface WordCoachSemanticIssue {
-  severity: 'warning' | 'error';
-  code: WordCoachSemanticIssueCode;
-  senseIndex: number;
-  message: string;
-}
-
-export interface WordCoachSemanticReview {
-  reviewVersion: number;
-  contentHash: string;
-  verdict: WordCoachReviewVerdict;
-  issues: WordCoachSemanticIssue[];
-  model: string;
-  reviewedAt: string;
+  senseContent?: Record<string, WordSenseLearningContent>;
 }
 
 export interface StaticWordCoachShard {

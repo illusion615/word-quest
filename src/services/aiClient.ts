@@ -5,8 +5,7 @@ import type {
   WordBankManifest,
   WordEntry,
   WordExplanation,
-  WordCoachReviewVerdict,
-  WordCoachSemanticIssue,
+  WordSenseLearningContent,
   WordSenseExample,
 } from '../domain/models';
 import {
@@ -20,9 +19,11 @@ import {
 } from '../domain/sentencePolicy';
 import {
   parseDefinitionSenses,
+  parseWordSenses,
   primarySense,
   type DefinitionSense,
 } from '../domain/wordText';
+import { Inflectors, infinitives } from 'en-inflectors';
 
 export type AiAuthMode = 'bearer' | 'api-key';
 
@@ -230,37 +231,45 @@ interface ValidSenseExamplePayload {
 }
 
 interface CoachSensePayload {
-  sourceStatus?: unknown;
-  distinction?: unknown;
-  pattern?: unknown;
+  senseId?: unknown;
+  mnemonic?: unknown;
+  usageTip?: unknown;
   englishSentence?: unknown;
   localizedTranslation?: unknown;
 }
 
+export class PartialWordExplanationError extends Error {
+  readonly partialSenseContent: Record<string, WordSenseLearningContent>;
+  readonly failedSenseIds: string[];
+
+  constructor(
+    message: string,
+    partialSenseContent: Record<string, WordSenseLearningContent>,
+    failedSenseIds: string[],
+  ) {
+    super(message);
+    this.name = 'PartialWordExplanationError';
+    this.partialSenseContent = partialSenseContent;
+    this.failedSenseIds = failedSenseIds;
+  }
+}
+
 const WORD_COACH_TEXT_LIMITS = {
-  label: 48,
   memoryHook: 1000,
-  distinction: 600,
-  pattern: 200,
   usageGuide: 500,
   sentence: 180,
   translation: 220,
 } as const;
 
-const QUALITY_ISSUE_CODES = [
-  'source_conflict',
-  'sense_mismatch',
-  'unnatural_example',
-  'translation_error',
-  'unsupported_claim',
-  'missing_gloss',
-  'misleading_usage',
-  'other',
-] as const;
+export interface CoachSenseInput extends DefinitionSense {
+  id?: string;
+  sourceIndex?: number;
+  /** Authoritative dictionary example reused instead of generating one. */
+  dictionaryExample?: { english: string; chinese: string };
+}
 
-export interface WordExplanationQualityReview {
-  verdict: WordCoachReviewVerdict;
-  issues: WordCoachSemanticIssue[];
+function resolvedSenseId(sense: CoachSenseInput, index: number, targetWord: string): string {
+  return sense.id ?? `${targetWord.toLowerCase()}:s${index}`;
 }
 
 function plainText(value: unknown, field: string, maxLength?: number): string {
@@ -280,17 +289,6 @@ function escapeMarkdownInline(value: string): string {
   return value
     .replace(/\\/g, '\\\\')
     .replace(/([`*_[\]<>])/g, '\\$1');
-}
-
-function validateCoachLabels(labels: readonly string[], targetWord: string): void {
-  const normalizedTarget = targetWord.trim().toLowerCase();
-  if (new Set(labels).size !== labels.length
-    || labels.some((label) => (
-      label.length > WORD_COACH_TEXT_LIMITS.label
-      || (normalizedTarget && sentenceUsesTargetWord(label, normalizedTarget))
-    ))) {
-    throw new Error('AI 词汇讲解的栏目标签必须是简短、通用且互不重复的名称。');
-  }
 }
 
 function hasInvalidSpellingCue(memoryHook: string, targetWord: string): boolean {
@@ -345,9 +343,10 @@ function completeCoachText(value: unknown, field: string, maxLength: number): st
 
 function parseChineseSenseExamples(
   value: unknown,
-  chineseSenseCount: number,
+  chineseSenses: readonly DefinitionSense[],
   targetWord: string,
 ): WordSenseExample[] {
+  const chineseSenseCount = chineseSenses.length;
   if (!Array.isArray(value)) throw new Error('AI 词汇讲解内容不完整。');
   const examples = value.flatMap((raw): ValidSenseExamplePayload[] => {
     if (!raw || typeof raw !== 'object') return [];
@@ -387,7 +386,7 @@ function parseChineseSenseExamples(
     if (latinWords.length < 3 || /[\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af]/u.test(sentence)) {
       throw new Error(`AI 为中文第 ${senseIndex + 1} 个义项返回的不是英文例句。`);
     }
-    if (!sentenceUsesTargetWord(sentence, targetWord)) {
+    if (!sentenceUsesTargetWord(sentence, targetWord, chineseSenses[senseIndex]?.label)) {
       throw new Error(`AI 为中文第 ${senseIndex + 1} 个义项的例句未使用目标词。`);
     }
     return {
@@ -403,54 +402,69 @@ function parseChineseSenseExamples(
   });
 }
 
-export function sentenceUsesTargetWord(sentence: string, targetWord: string): boolean {
+type InflectionFamily = 'verb' | 'noun' | 'adjective' | 'all';
+
+function inflectionFamily(partOfSpeechLabel?: string): InflectionFamily {
+  const normalized = partOfSpeechLabel?.trim().toLowerCase() ?? '';
+  if (['v.', 'vi.', 'vt.', 'aux.'].includes(normalized)) return 'verb';
+  if (normalized === 'n.') return 'noun';
+  if (['a.', 'adj.'].includes(normalized)) return 'adjective';
+  return 'all';
+}
+
+export function sentenceUsesTargetWord(
+  sentence: string,
+  targetWord: string,
+  partOfSpeechLabel?: string,
+): boolean {
   const target = targetWord.trim().toLowerCase();
   if (!target) return false;
-  const forms = new Set([target]);
-  const irregularForms: Record<string, string[]> = {
-    be: ['am', 'is', 'are', 'was', 'were', 'been', 'being'],
-    do: ['does', 'did', 'done', 'doing'],
-    go: ['goes', 'went', 'gone', 'going'],
-    have: ['has', 'had', 'having'],
-    make: ['made', 'making'],
-    run: ['ran', 'running'],
-    say: ['says', 'said', 'saying'],
-    see: ['saw', 'seen', 'seeing'],
-    take: ['took', 'taken', 'taking'],
-    write: ['wrote', 'written', 'writing'],
-  };
-  irregularForms[target]?.forEach((form) => forms.add(form));
-  if (/^[a-z]+$/.test(target)) {
-    forms.add(`${target}s`);
-    forms.add(`${target}es`);
-    forms.add(`${target}ed`);
-    forms.add(`${target}ing`);
-    if (target.endsWith('e') && target.length > 2) {
-      forms.add(`${target}d`);
-      forms.add(`${target.slice(0, -1)}ing`);
-    }
-    if (/[^aeiou]y$/.test(target)) {
-      forms.add(`${target.slice(0, -1)}ies`);
-      forms.add(`${target.slice(0, -1)}ied`);
-    }
-    if (target.endsWith('ie')) forms.add(`${target.slice(0, -2)}ying`);
-    if (/[^aeiou][aeiou][^aeiouwxy]$/.test(target)) {
-      const finalLetter = target.at(-1);
-      forms.add(`${target}${finalLetter}ed`);
-      forms.add(`${target}${finalLetter}ing`);
-    }
-  }
-  const tokens = sentence.toLowerCase().match(/[a-z]+(?:['’-][a-z]+)*/g) ?? [];
-  return tokens.some((token) => forms.has(token));
+  const family = inflectionFamily(partOfSpeechLabel);
+  const inflector = new Inflectors(target);
+  const verbForms = target === 'be'
+    ? ['am', 'is', 'are', 'was', 'were', 'been', 'being']
+    : [
+    ...(infinitives[target] ?? []),
+    inflector.toPresent(),
+    inflector.toPast(),
+    inflector.toPastParticiple(),
+    inflector.toPresentS(),
+    inflector.toGerund(),
+  ];
+  const nounForms = [
+    inflector.toSingular(),
+    inflector.toPlural(),
+  ];
+  const adjectiveForms = [
+    inflector.comparative(),
+    inflector.superlative(),
+  ];
+  const forms = new Set([
+    target,
+    ...(family === 'verb' || family === 'all' ? verbForms : []),
+    ...(family === 'noun' || family === 'all' ? nounForms : []),
+    ...(family === 'adjective' || family === 'all' ? adjectiveForms : []),
+  ].map((form) => form.toLowerCase()));
+  const words = [...new Intl.Segmenter('en', { granularity: 'word' }).segment(sentence)]
+    .filter((segment) => segment.isWordLike)
+    .map((segment) => segment.segment.toLowerCase());
+  return words.some((word) => forms.has(word));
 }
 
 export function parseStoredWordExplanation(
   value: unknown,
-  chineseSenseCount: number,
+  chineseSenses: readonly CoachSenseInput[],
   targetWord: string,
 ): WordExplanation {
   if (!value || typeof value !== 'object') throw new Error('静态词汇讲解内容无效。');
-  const record = value as { coachMarkdown?: unknown; senseExamples?: unknown };
+  const record = value as {
+    coachMarkdown?: unknown;
+    senseExamples?: unknown;
+    senseContent?: unknown;
+  };
+  if (record.senseContent && typeof record.senseContent === 'object') {
+    return explanationFromSenseContent(record.senseContent, chineseSenses, targetWord);
+  }
   const markdown = typeof record.coachMarkdown === 'string'
     ? record.coachMarkdown.trim()
     : '';
@@ -459,7 +473,7 @@ export function parseStoredWordExplanation(
     markdown,
     senseExamples: parseChineseSenseExamples(
       record.senseExamples,
-      chineseSenseCount,
+      chineseSenses,
       targetWord,
     ),
   };
@@ -467,193 +481,135 @@ export function parseStoredWordExplanation(
 
 export function parseWordExplanation(
   content: string,
-  chineseSenses: readonly DefinitionSense[],
+  chineseSenses: readonly CoachSenseInput[],
   targetWord: string,
 ): WordExplanation {
   const parsed = parseJsonResponse(content, 'AI 没有返回有效的词汇讲解数据。');
   const payload = Array.isArray(parsed) && parsed.length === 1 ? parsed[0] : parsed;
   const record = payload && typeof payload === 'object'
-    ? payload as {
-        labels?: unknown;
-        memoryHook?: unknown;
-        senses?: unknown;
-        senseContrast?: unknown;
-        commonConfusion?: unknown;
-        caution?: unknown;
-      }
+    ? payload as { senses?: unknown }
     : null;
-  const labels = record?.labels && typeof record.labels === 'object'
-    ? record.labels as {
-        memoryHook?: unknown;
-        senseMap?: unknown;
-        usageGuide?: unknown;
-        pattern?: unknown;
-        senseContrast?: unknown;
-        commonConfusion?: unknown;
-        caution?: unknown;
-      }
-    : null;
-  if (!record || !labels || !Array.isArray(record.senses)) {
+  if (!record || !Array.isArray(record.senses)) {
     throw new Error('AI 词汇讲解内容不完整。');
   }
+  const expectedById = new Map(chineseSenses.map((sense, position) => (
+    [resolvedSenseId(sense, position, targetWord), { sense, position }]
+  )));
+  const failedSenseIds = new Set(expectedById.keys());
+  const contentById: Record<string, WordSenseLearningContent> = {};
+  const errors: string[] = record.senses.length === chineseSenses.length
+    ? []
+    : ['AI 返回的义项讲解数量不正确。'];
 
-  const parsedLabels = {
-    memoryHook: plainText(labels.memoryHook, '记忆钩子标题', WORD_COACH_TEXT_LIMITS.label),
-    senseMap: plainText(labels.senseMap, '义项地图标题', WORD_COACH_TEXT_LIMITS.label),
-    usageGuide: plainText(labels.usageGuide, '使用指南标题', WORD_COACH_TEXT_LIMITS.label),
-    pattern: plainText(labels.pattern, '搭配标签', WORD_COACH_TEXT_LIMITS.label),
-    senseContrast: plainText(labels.senseContrast, '义项对比标签', WORD_COACH_TEXT_LIMITS.label),
-    commonConfusion: plainText(labels.commonConfusion, '常见混淆标签', WORD_COACH_TEXT_LIMITS.label),
-    caution: plainText(labels.caution, '使用警告标签', WORD_COACH_TEXT_LIMITS.label),
-  };
-  validateCoachLabels(Object.values(parsedLabels), targetWord);
-
-  const rawMemoryHook = plainText(
-    record.memoryHook,
-    '记忆钩子',
-    WORD_COACH_TEXT_LIMITS.memoryHook,
-  );
-  const memoryHook = safeMemoryHook(rawMemoryHook, targetWord, chineseSenses);
-  if (record.senses.length !== chineseSenses.length) {
-    throw new Error('AI 返回的义项讲解数量不正确。');
-  }
-  const parsedSenses = record.senses.map((value, position) => {
+  record.senses.forEach((value, position) => {
     if (!value || typeof value !== 'object') {
-      throw new Error(`AI 返回的第 ${position + 1} 条义项讲解无效。`);
+      errors.push(`AI 返回的第 ${position + 1} 条义项讲解无效。`);
+      return;
     }
     const sense = value as CoachSensePayload;
+    try {
+      const senseId = plainText(sense.senseId, 'senseId', 120);
+      const expectedEntry = expectedById.get(senseId);
+      if (!expectedEntry) throw new Error('AI 返回了错误的 senseId。');
+      const expected = expectedEntry.sense;
+      const dictionaryExample = expected.dictionaryExample;
+      const candidate = {
+        senseId,
+        mnemonic: safeMemoryHook(
+          plainText(sense.mnemonic, '助记技巧', WORD_COACH_TEXT_LIMITS.memoryHook),
+          targetWord,
+          [expected],
+        ),
+        example: dictionaryExample ? dictionaryExample.english : sense.englishSentence,
+        translation: dictionaryExample ? dictionaryExample.chinese : sense.localizedTranslation,
+        exampleSource: dictionaryExample ? 'dictionary' as const : 'ai' as const,
+        usageTip: completeCoachText(
+          sense.usageTip,
+          '使用技巧',
+          WORD_COACH_TEXT_LIMITS.usageGuide,
+        ),
+      };
+      const validated = explanationFromSenseContent(
+        { [senseId]: candidate },
+        [{ ...expected, id: senseId }],
+        targetWord,
+      );
+      contentById[senseId] = validated.senseContent![senseId];
+      failedSenseIds.delete(senseId);
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : String(error));
+    }
+  });
+
+  if (errors.length > 0 || failedSenseIds.size > 0) {
+    throw new PartialWordExplanationError(
+      errors[0] ?? `AI 未返回 ${[...failedSenseIds][0]} 的学习内容。`,
+      contentById,
+      [...failedSenseIds],
+    );
+  }
+  return explanationFromSenseContent(contentById, chineseSenses, targetWord);
+}
+
+function validateGeneratedExample(
+  sentence: string,
+  senseIndex: number,
+  sense: CoachSenseInput,
+  targetWord: string,
+): void {
+  const displayIndex = sense.sourceIndex ?? senseIndex;
+  const latinWords = sentence.match(/[A-Za-z]+(?:['’-][A-Za-z]+)*/g) ?? [];
+  if (latinWords.length < 3 || /[\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af]/u.test(sentence)) {
+    throw new Error(`AI 为中文第 ${displayIndex + 1} 个义项返回的不是英文例句。`);
+  }
+  if (!sentenceUsesTargetWord(sentence, targetWord, sense?.label)) {
+    throw new Error(`AI 为中文第 ${displayIndex + 1} 个义项的例句未使用目标词。`);
+  }
+}
+
+function explanationFromSenseContent(
+  value: unknown,
+  senses: readonly CoachSenseInput[],
+  targetWord: string,
+): WordExplanation {
+  if (!value || typeof value !== 'object') throw new Error('逐义学习内容无效。');
+  const candidate = value as Record<string, Partial<WordSenseLearningContent>>;
+  const senseContent = Object.fromEntries(senses.map((sense, senseIndex) => {
+    const senseId = resolvedSenseId(sense, senseIndex, targetWord);
+    const item = candidate[senseId];
+    if (!item || item.senseId !== senseId) throw new Error(`缺少 ${senseId} 的学习内容。`);
+    const exampleSource = item.exampleSource === 'dictionary' ? 'dictionary' : 'ai';
+    const example = plainText(item.example, `${senseId} 例句`, WORD_COACH_TEXT_LIMITS.sentence);
+    if (exampleSource === 'ai') {
+      validateGeneratedExample(example, senseIndex, sense, targetWord);
+    }
+    return [senseId, {
+      senseId,
+      mnemonic: plainText(item.mnemonic, `${senseId} 助记技巧`, WORD_COACH_TEXT_LIMITS.memoryHook),
+      example,
+      translation: plainText(item.translation, `${senseId} 翻译`, WORD_COACH_TEXT_LIMITS.translation),
+      usageTip: completeCoachText(item.usageTip, `${senseId} 使用技巧`, WORD_COACH_TEXT_LIMITS.usageGuide),
+      exampleSource,
+    } satisfies WordSenseLearningContent];
+  }));
+  const senseExamples: WordSenseExample[] = senses.map((sense, senseIndex) => {
+    const content = senseContent[resolvedSenseId(sense, senseIndex, targetWord)];
     return {
-      senseIndex: position,
-      sourceStatus: sense.sourceStatus === 'questionable' ? 'questionable' : 'standard',
-      distinction: plainText(
-        sense.distinction,
-        '义项辨析',
-        WORD_COACH_TEXT_LIMITS.distinction,
-      ),
-      pattern: plainText(sense.pattern, '搭配或结构', WORD_COACH_TEXT_LIMITS.pattern),
-      englishSentence: sense.englishSentence,
-      localizedTranslation: sense.localizedTranslation,
+      language: 'zh' as DefinitionLanguage,
+      senseIndex,
+      sentence: content.example,
+      translation: content.translation,
     };
   });
-  const usageGuide = {
-    senseContrast: completeCoachText(
-      record.senseContrast,
-      '义项对比',
-      WORD_COACH_TEXT_LIMITS.usageGuide,
-    ),
-    commonConfusion: completeCoachText(
-      record.commonConfusion,
-      '常见混淆',
-      WORD_COACH_TEXT_LIMITS.usageGuide,
-    ),
-    caution: completeCoachText(
-      record.caution,
-      '使用警告',
-      WORD_COACH_TEXT_LIMITS.usageGuide,
-    ),
-  };
-
-  const senseExamples = parseChineseSenseExamples(
-    parsedSenses.map((sense) => ({
-      language: 'zh',
-      senseIndex: sense.senseIndex,
-      englishSentence: sense.englishSentence,
-      localizedTranslation: sense.localizedTranslation,
-    })),
-    chineseSenses.length,
-    targetWord,
-  );
-  const questionableSenseIndexes = new Set(parsedSenses
-    .filter((sense) => sense.sourceStatus === 'questionable')
-    .map((sense) => sense.senseIndex));
-  for (const example of senseExamples) {
-    if (!questionableSenseIndexes.has(example.senseIndex)) continue;
-    const lowerSentence = example.sentence.toLowerCase();
-    const isMetalinguistic = /\b(?:word|term|usage|sense|meaning)\b/.test(lowerSentence)
-      || lowerSentence.includes('standard english');
-    if (!lowerSentence.includes(targetWord.toLowerCase()) || !isMetalinguistic) {
-      throw new Error(`AI 为可疑源义项 ${example.senseIndex + 1} 提供了误导性的实例，而非纠错说明。`);
-    }
-  }
-
-  const noteByIndex = new Map(parsedSenses.map((sense) => [sense.senseIndex, sense]));
-  const senseLines = chineseSenses.map((sense, senseIndex) => {
-    const note = noteByIndex.get(senseIndex)!;
-    const title = [sense.label, sense.text].filter(Boolean).join(' ');
-    return `- **${escapeMarkdownInline(title)}**: ${escapeMarkdownInline(note.distinction)} `
-      + `**${escapeMarkdownInline(parsedLabels.pattern)}:** ${escapeMarkdownInline(note.pattern)}`;
-  });
-  const usageLines = [
-    `- **${escapeMarkdownInline(parsedLabels.senseContrast)}**: ${escapeMarkdownInline(usageGuide.senseContrast)}`,
-    `- **${escapeMarkdownInline(parsedLabels.commonConfusion)}**: ${escapeMarkdownInline(usageGuide.commonConfusion)}`,
-    `- **${escapeMarkdownInline(parsedLabels.caution)}**: ${escapeMarkdownInline(usageGuide.caution)}`,
-  ];
   const markdown = [
-    `### ${escapeMarkdownInline(parsedLabels.memoryHook)}`,
+    '### 逐义助记',
     '',
-    escapeMarkdownInline(memoryHook),
-    '',
-    `### ${escapeMarkdownInline(parsedLabels.senseMap)}`,
-    '',
-    ...senseLines,
-    '',
-    `### ${escapeMarkdownInline(parsedLabels.usageGuide)}`,
-    '',
-    ...usageLines,
+    senses.map((sense, index) => {
+      const content = senseContent[resolvedSenseId(sense, index, targetWord)];
+      return `- **${escapeMarkdownInline([sense.label, sense.text].filter(Boolean).join(' '))}**: ${escapeMarkdownInline(content.mnemonic)} **使用技巧:** ${escapeMarkdownInline(content.usageTip)}`;
+    }).join('\n'),
   ].join('\n');
-
-  return { markdown, senseExamples };
-}
-
-export function parseWordExplanationQualityReview(
-  content: string,
-  chineseSenseCount: number,
-): WordExplanationQualityReview {
-  const payload = parseJsonResponse(content, 'AI 没有返回有效的词汇讲解审校数据。');
-  if (!payload || typeof payload !== 'object') throw new Error('AI 词汇讲解审校内容不完整。');
-  const candidate = payload as { verdict?: unknown; issues?: unknown };
-  if ((candidate.verdict !== 'pass'
-      && candidate.verdict !== 'warning'
-      && candidate.verdict !== 'fail')
-    || !Array.isArray(candidate.issues)) {
-    throw new Error('AI 词汇讲解审校内容不完整。');
-  }
-  const issues: WordCoachSemanticIssue[] = candidate.issues.map((value, index) => {
-    if (!value || typeof value !== 'object') throw new Error(`AI 第 ${index + 1} 条审校问题无效。`);
-    const issue = value as {
-      severity?: unknown;
-      code?: unknown;
-      senseIndex?: unknown;
-      message?: unknown;
-    };
-    if ((issue.severity !== 'warning' && issue.severity !== 'error')
-      || typeof issue.code !== 'string'
-      || !QUALITY_ISSUE_CODES.includes(issue.code as typeof QUALITY_ISSUE_CODES[number])
-      || !Number.isInteger(issue.senseIndex)
-      || Number(issue.senseIndex) < -1
-      || Number(issue.senseIndex) >= chineseSenseCount
-      || typeof issue.message !== 'string'
-      || !issue.message.trim()) {
-      throw new Error(`AI 第 ${index + 1} 条审校问题无效。`);
-    }
-    return {
-      severity: issue.severity,
-      code: issue.code as WordCoachSemanticIssue['code'],
-      senseIndex: Number(issue.senseIndex),
-      message: issue.message.trim(),
-    };
-  });
-  const errorCount = issues.filter((issue) => issue.severity === 'error').length;
-  if ((candidate.verdict === 'pass' && issues.length > 0)
-    || (candidate.verdict === 'warning' && (issues.length === 0 || errorCount > 0))
-    || (candidate.verdict === 'fail' && errorCount === 0)) {
-    throw new Error('AI 词汇讲解审校结论与问题列表不一致。');
-  }
-  return { verdict: candidate.verdict, issues };
-}
-
-function wordExplanationQualityResponseFormat(): Record<string, unknown> {
-  return { type: 'json_object' };
+  return { markdown, senseExamples, senseContent };
 }
 
 function wordExplanationResponseFormat(): Record<string, unknown> {
@@ -907,36 +863,74 @@ export async function testAiConnection(config: AiConnectionConfig): Promise<stri
   ]);
 }
 
-export function wordExplanationMaxTokens(senseCount: number): number {
-  return Math.min(6000, Math.max(2200, 1200 + (Math.max(0, senseCount) * 300)));
+export function wordExplanationMaxTokens(
+  generatedExampleCount: number,
+  senseCount: number = generatedExampleCount,
+): number {
+  const senses = Math.max(0, senseCount);
+  const examples = Math.max(0, Math.min(generatedExampleCount, senses));
+  return Math.min(6000, Math.max(1600, 900 + (senses * 180) + (examples * 160)));
 }
 
 export async function explainWord(
   config: AiConnectionConfig,
   word: WordEntry,
-  options: { repairFeedback?: string } = {},
+  options: {
+    repairFeedback?: string;
+    senseIds?: string[];
+    lexicalSenses?: Array<{
+      id: string;
+      glossesEn?: string[];
+      labels?: Record<string, string[]>;
+      contexts?: string[];
+      patterns?: string[];
+      examples?: Array<{ english: string; chinese: string }>;
+    }>;
+  } = {},
 ): Promise<WordExplanation> {
   const outputLanguage = config.outputLanguage.trim() || 'Simplified Chinese';
-  const chineseSenses = parseDefinitionSenses(word.definitionZh);
   const englishSenses = parseDefinitionSenses(word.definition);
+  const lexicalSenses = new Map((options.lexicalSenses ?? []).map((sense) => [sense.id, sense]));
+  const allChineseSenses: CoachSenseInput[] = parseWordSenses(word).map((sense, sourceIndex) => {
+    const dictionaryExample = lexicalSenses.get(sense.id)?.examples?.[0];
+    return dictionaryExample?.english && dictionaryExample.chinese
+      ? {
+        ...sense,
+        sourceIndex,
+        dictionaryExample: {
+          english: dictionaryExample.english,
+          chinese: dictionaryExample.chinese,
+        },
+      }
+        : { ...sense, sourceIndex };
+  });
+  const requestedSenseIds = options.senseIds?.length ? new Set(options.senseIds) : null;
+  const chineseSenses = requestedSenseIds
+    ? allChineseSenses.filter((sense) => sense.id && requestedSenseIds.has(sense.id))
+    : allChineseSenses;
+  if (requestedSenseIds && chineseSenses.length !== requestedSenseIds.size) {
+    throw new Error('请求包含当前词条不存在的义项 ID。');
+  }
+  const missingExampleIds = chineseSenses
+    .filter((sense) => !sense.dictionaryExample)
+    .map((sense) => sense.id);
   const systemPrompt = [
     'You are an expert English vocabulary coach helping a learner truly understand one word so they can recall it and use it correctly.',
-    'Treat the supplied Chinese senses as the coverage checklist and the English senses as reference evidence. Use reliable standard-English knowledge to explain the word, but never invent an extra sense.',
-    'Cross-check each supplied Chinese sense against the English reference and standard contemporary usage. If a gloss or part-of-speech label appears dubious, obsolete, or contradictory, do not force an unnatural claim or example; explain the discrepancy cautiously in that sense item and in Caution, then demonstrate the nearest truthful standard usage.',
-    'Return only one flat JSON object with exactly this shape: {"labels":{"memoryHook":"short localized label","senseMap":"short localized label","usageGuide":"short localized label","pattern":"short localized label","senseContrast":"short localized label","commonConfusion":"short localized label","caution":"short localized label"},"memoryHook":"content","senses":[{"sourceStatus":"standard|questionable","distinction":"content","pattern":"content","englishSentence":"content","localizedTranslation":"content"}],"senseContrast":"content","commonConfusion":"content","caution":"content"}. Do not put senseIndex inside a sense object: array position is the index. Do not nest a coach object, do not create a separate senseExamples array, and do not add commentary or extra keys. Every string field must be plain text without Markdown or HTML.',
-    'labels must contain concise, distinct localized equivalents of "Memory Hook", "Sense Map", "Usage Guide", "Pattern", "Sense Contrast", "Common Confusion", and "Caution". Labels are generic UI names only: never put the target word, a collocation, mnemonic content, or sense content in any label. labels.pattern is the translation of the UI label "Pattern", not an example pattern.',
-    'memoryHook must be one memorable paragraph focused on the exact supplied headword and its primary standard meaning. Use morphology only for an unmistakable productive affix visibly attached to a standalone base (such as un- + happy, re- + write, cord + -less); never propose a root, prefix, or suffix analysis for an opaque word such as rigid or bird. Otherwise prefer a vivid mental image or spelling cue. If you spell the word letter by letter, copy every letter from word.word in the exact order and silently compare the result character by character before returning it. Never omit, replace, or reorder a letter. The source does not provide historical etymology, so never claim that a word "comes from" an older language or old form, and never invent a root meaning. Pronunciation is already displayed and taught elsewhere in the UI: do not include phonetic transcription, pronunciation variants, stress rules, or sound claims in memoryHook. Never present a mnemonic as factual word history.',
-    'senses must contain exactly one object for each index in requiredSenseIndexes, no more and no fewer, in that order. Do not output senseIndex because the array position is authoritative. Keeping distinction, pattern, englishSentence, and localizedTranslation in the SAME object is mandatory: all four fields must teach that array position’s Chinese sense and supplied part of speech. Never substitute a noun meaning into a verb item, move content between positions, or import an English-only sense. Each Chinese sense includes glossChecklist; distinction must explicitly account for EVERY checklist item, either by teaching that meaning or by clearly marking that item questionable and giving the standard replacement.',
-    'Set sourceStatus to standard when the supplied gloss can be taught truthfully in contemporary English. Set it to questionable only when the gloss or part-of-speech assignment is an unrelated abbreviation, malformed, or demonstrably nonstandard. distinction should clearly separate that indexed sense from the others and preserve every material gloss grouped inside it. For a questionable source, explicitly say what is wrong and give the nearest truthful contemporary usage with the SAME part of speech. pattern gives one real, idiomatic collocation or construction for that same indexed sense; for questionable sources, give the correct replacement wording rather than an invented pattern. Never split comma-separated synonyms into extra objects.',
-    'senseContrast, commonConfusion, and caution are three concrete, non-redundant, complete usage notes. Each must end as a complete sentence. Never finish a field with a dangling lead-in such as "for example", "such as", "错误地说", or "例如". Use caution to flag a questionable source gloss or a usage that is rare, dated, regional, or technical.',
-    'The English reference may contain senses absent from requiredSenseIndexes. Never turn those extra English senses into Sense Map items or senseExamples; mention one only in the Usage Guide when it prevents confusion.',
+    'Treat every supplied Oxford-derived Chinese sense and its sourceReference as authoritative lexical facts. Do not evaluate, reject, correct, merge, split, relabel, or add dictionary senses.',
+    'Use sourceReference glosses, labels, contexts, and patterns as read-only evidence for the matching sense.',
+    'Return only one flat JSON object with exactly this shape: {"senses":[{"senseId":"copy the supplied stable ID exactly","mnemonic":"content","usageTip":"content","englishSentence":"only when requested","localizedTranslation":"only when requested"}]}. Return exactly one object for every supplied senseId, in the same order, with no extra keys or commentary. Every field must be plain text without Markdown or HTML.',
+    'Write mnemonic and usageTip for every sense. A sense whose dictionaryExample is not null already has an authoritative Oxford example: omit englishSentence and localizedTranslation for it, and never rewrite that example.',
+    'Only for a sense listed in sensesNeedingExample (dictionaryExample is null) must you add englishSentence and localizedTranslation.',
+    'For each sense, mnemonic is a concise memorable technique for THAT sense. Prefer a vivid scene or reliable spelling association. Use morphology only for an unmistakable productive affix visibly attached to a standalone base; never invent roots, etymology, pronunciation claims, or historical origins.',
+    'usageTip is one complete, concrete learner-facing usage rule for THAT sense: a collocation, construction, register limit, countability rule, complementation rule, or common confusion. Prefer the supplied contexts, patterns, and labels as the factual basis. Write it entirely in the requested output language except for the headword or a short standard construction. Do not put illustrative English examples in usageTip because an example already accompanies the sense. Never finish with a dangling lead-in such as "for example", "such as", "错误地说", or "例如".',
+    'The English reference may contain senses absent from the approved senseIds. Never generate content for those extra senses.',
     'If a sense is a grammar or technical term, explain what it means, its standard form or pattern, when it is used, and one common mistake or limitation. Do not merely restate the dictionary label.',
-    'Each senses[i].englishSentence must be natural contemporary English of 6 to 18 words, clearly demonstrate that exact sense and part of speech, and use the target word or its natural inflected form. Never force the base form when standard grammar requires an inflection, and never distort grammar merely to preserve the dictionary label. localizedTranslation must faithfully translate that sentence into the requested output language.',
+    'Each englishSentence you do write must be natural contemporary English of 6 to 18 words, clearly demonstrate that exact sense and part of speech, and use the target word or its natural inflected form. Never force the base form when standard grammar requires an inflection, and never distort grammar merely to preserve the dictionary label. localizedTranslation must faithfully translate that sentence into the requested output language.',
     'When the target is an activity verb, prefer using it as the finite main verb. If it follows a verb that selects a gerund, use the -ing form: enjoy, avoid, finish, and mind take gerunds, never a to-infinitive (for example, "enjoys birding", never "enjoys to bird").',
-    'For a valid grammar or technical-term sense, write a teaching example that makes the concept understandable in context rather than merely naming the term. For every senses[i] whose sourceStatus is questionable, its englishSentence MUST be a simple metalinguistic correction containing the lowercase headword exactly, for example "The word be does not mean backend in standard English." Never demonstrate an unrelated acronym or fabricate an ordinary usage for a questionable source.',
-    'Before returning the JSON, silently check every English sentence for verb complementation, transitivity, articles, prepositions, countability, inflection, collocation, and agreement. Replace any doubtful sentence with a simpler idiomatic one. Then verify that every translation says exactly what its English sentence says.',
-    'Finally run a consistency check: memoryHook spells word.word exactly and contains no pronunciation advice; each senses[i] keeps its distinction, pattern, sentence, and translation aligned to requiredSenseIndexes[i] and one part of speech; every questionable source has a metalinguistic correction example; every label is a generic UI label; and no field contradicts another field.',
-    'Localize all labels, explanations, and translations into the requested output language. Do not leave labels in English unless the requested output language is English. Keep the complete coach concise enough to scan, but include the distinctions a learner needs to avoid misuse.',
+    'For a grammar or technical-term sense, write a teaching example that makes the concept understandable in context rather than merely naming the term.',
+    'Before returning the JSON, silently check every English sentence you wrote for verb complementation, transitivity, articles, prepositions, countability, inflection, collocation, and agreement. Replace any doubtful sentence with a simpler idiomatic one. Then verify that every translation says exactly what its English sentence says.',
+    'Finally check that every senseId is copied exactly and each mnemonic and usageTip stays aligned to that one supplied sense.',
+    'Localize mnemonic, translation, and usageTip into the requested output language. Keep every field concise enough to scan.',
     options.repairFeedback
       ? `A previous response failed validation: ${options.repairFeedback} Correct that problem in this response.`
       : '',
@@ -950,70 +944,21 @@ export async function explainWord(
       content: JSON.stringify({
         word,
         requiredSenseCount: chineseSenses.length,
-        requiredSenseIndexes: chineseSenses.map((_, senseIndex) => senseIndex),
-        chineseSenses: chineseSenses.map((sense, senseIndex) => ({
-          senseIndex,
+        requiredSenseIds: chineseSenses.map((sense) => sense.id),
+        sensesNeedingExample: missingExampleIds,
+        chineseSenses: chineseSenses.map((sense) => ({
+          senseId: sense.id,
           ...sense,
           glossChecklist: sense.text.split(/[,，、]/).map((gloss) => gloss.trim()).filter(Boolean),
+          sourceReference: lexicalSenses.get(sense.id ?? '') ?? null,
         })),
         englishSenses: englishSenses.map((sense, senseIndex) => ({ senseIndex, ...sense })),
       }),
     },
   ], fetch, {
     temperature: 0.35,
-    maxTokens: wordExplanationMaxTokens(chineseSenses.length),
+    maxTokens: wordExplanationMaxTokens(missingExampleIds.length, chineseSenses.length),
     responseFormat: wordExplanationResponseFormat(),
   });
   return parseWordExplanation(content, chineseSenses, word.word);
-}
-
-export async function evaluateWordExplanation(
-  config: AiConnectionConfig,
-  word: WordEntry,
-  explanation: WordExplanation,
-): Promise<WordExplanationQualityReview> {
-  const outputLanguage = config.outputLanguage.trim() || 'Simplified Chinese';
-  const chineseSenses = parseDefinitionSenses(word.definitionZh);
-  const systemPrompt = [
-    'You are a strict but fair bilingual vocabulary-content reviewer.',
-    'Return only one JSON object with exactly this shape: {"verdict":"pass|warning|fail","issues":[{"severity":"warning|error","code":"source_conflict|sense_mismatch|unnatural_example|translation_error|unsupported_claim|missing_gloss|misleading_usage|other","senseIndex":-1,"message":"..."}]}. Do not add keys.',
-    'Treat the supplied dictionary entry and its indexed Chinese senses as authoritative, even when the source groups several comma-separated glosses into one indexed sense.',
-    'Review the candidate explanation and every indexed English example. Do not rewrite the content.',
-    'Return fail with error issues if an example is unnatural, ungrammatical, mistranslated, or does not clearly demonstrate its exact indexed Chinese sense; if the explanation drops or changes a material supplied gloss; if a usage rule is misleading; or if it makes an unsupported factual, etymological, or acronym claim.',
-    'If the supplied dictionary sense itself is clearly malformed, contradictory, nonstandard, or assigned to the wrong headword so no truthful explanation can preserve it, use code source_conflict with error severity. Do not force the candidate to teach a source gloss that is demonstrably wrong.',
-    'Synonymous comma-separated glosses may be summarized together when their shared meaning is preserved. Do not demand a separate note or example for each comma-separated synonym.',
-    'Return warning only for a questionable but non-harmful mnemonic, a mild overgeneralization, or wording that deserves human review. Return pass only when no issues exist.',
-    'Use senseIndex -1 for an issue about the whole explanation. Otherwise use the zero-based Chinese sense index.',
-    'For pass, issues must be empty. For warning, every issue must have warning severity. For fail, include at least one error issue.',
-    `Write every issue.message in ${outputLanguage}.`,
-  ].join(' ');
-  const content = await requestCompletion(config, [
-    { role: 'system', content: systemPrompt },
-    {
-      role: 'user',
-      content: JSON.stringify({
-        word: {
-          id: word.id,
-          word: word.word,
-          phonetic: word.phonetic,
-          partOfSpeech: word.partOfSpeech,
-          definition: word.definition,
-          definitionZh: word.definitionZh,
-        },
-        chineseSenses: chineseSenses.map((sense, senseIndex) => ({
-          senseIndex,
-          ...sense,
-        })),
-        candidate: {
-          coachMarkdown: explanation.markdown,
-          senseExamples: explanation.senseExamples,
-        },
-      }),
-    },
-  ], fetch, {
-    temperature: 0,
-    maxTokens: Math.min(1800, Math.max(500, 300 + (chineseSenses.length * 180))),
-    responseFormat: wordExplanationQualityResponseFormat(),
-  });
-  return parseWordExplanationQualityReview(content, chineseSenses.length);
 }

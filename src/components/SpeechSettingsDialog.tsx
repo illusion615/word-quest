@@ -16,7 +16,7 @@ interface SpeechSettingsDialogProps {
   onStop: () => void;
 }
 
-const PREVIEW_TEXT = 'Hello, this is your WordBuddy voice.';
+const PREVIEW_TEXT = 'Hello, this is your Word Quest voice.';
 
 function groupVoices(voices: SpeechVoiceOption[]): Map<string, SpeechVoiceOption[]> {
   const groups = new Map<string, SpeechVoiceOption[]>();

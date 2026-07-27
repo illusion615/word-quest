@@ -6,14 +6,12 @@ import type {
 } from '../domain/models';
 import {
   WORD_COACH_PROMPT_VERSION,
-  WORD_COACH_REVIEW_VERSION,
   WORD_COACH_SCHEMA_VERSION,
   assessWordCoachQuality,
-  wordCoachContentHash,
   wordCoachShardId,
   wordCoachSourceHash,
 } from '../domain/wordCoach';
-import { parseDefinitionSenses } from '../domain/wordText';
+import { parseWordSenses } from '../domain/wordText';
 import { parseStoredWordExplanation } from '../services/aiClient';
 
 const shardPromises = new Map<string, Promise<StaticWordCoachShard | null>>();
@@ -55,15 +53,11 @@ function parseRecord(word: WordEntry, record: StaticWordCoachRecord): WordExplan
     || record.sourceHash !== wordCoachSourceHash(word)) return null;
   const explanation = parseStoredWordExplanation(
     record,
-    parseDefinitionSenses(word.definitionZh).length,
+    parseWordSenses(word),
     word.word,
   );
   if (assessWordCoachQuality(word, explanation)
     .some((issue) => issue.severity === 'error')) return null;
-  if (record.qualityReview
-    && record.qualityReview.reviewVersion === WORD_COACH_REVIEW_VERSION
-    && record.qualityReview.contentHash === wordCoachContentHash(explanation)
-    && record.qualityReview.verdict === 'fail') return null;
   return explanation;
 }
 

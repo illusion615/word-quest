@@ -1,4 +1,4 @@
-import { RefreshCw } from '../icons';
+import { ExternalLink, Info, RefreshCw } from '../icons';
 import type { BankCoverageMap } from '../domain/coverage';
 import type { BankId, WordBankManifest } from '../domain/models';
 import { CoverageRings } from './CoverageRings';
@@ -28,6 +28,9 @@ export function BattleRecord({
   const currentCoverage = coverage?.[currentBank.id];
   const learningPercentage = currentCoverage?.learningPercentage ?? 0;
   const masteryPercentage = currentCoverage?.masteryPercentage ?? 0;
+  const statusLabel = currentBank.status === 'curated'
+    ? '备考词表 · 官方无固定全集'
+    : '官方考试大纲词表';
 
   return (
     <section className="battle-record" aria-labelledby="battle-record-heading">
@@ -78,6 +81,19 @@ export function BattleRecord({
             </button>
           );
         })}
+      </div>
+
+      <div className="source-note battle-record-source">
+        <Info aria-hidden="true" />
+        <div>
+          <strong>{statusLabel}</strong>
+          <p>{currentBank.basis} · {currentBank.sourceVersion}</p>
+        </div>
+        {currentBank.sourceUrl && (
+          <a href={currentBank.sourceUrl} target="_blank" rel="noreferrer">
+            {currentBank.sourceName} <ExternalLink aria-hidden="true" />
+          </a>
+        )}
       </div>
 
       {coverageError && (

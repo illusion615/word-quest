@@ -6,157 +6,185 @@
   <script>
     (() => {
       const param = new URLSearchParams(window.location.search).get("scoutTheme");
-      const theme =
-        param || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      const stored = localStorage.getItem("forgeTheme");
+      const theme = param || stored
+        || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
       document.documentElement.setAttribute("data-theme", theme);
     })();
   </script>
-  <title>WordBuddy · 词汇教练语料生成</title>
+  <title>Word Quest · Lexicon Forge</title>
   <style>
+    @font-face {
+      font-family: "Lilita One";
+      src: url("/lilita-one.woff2") format("woff2");
+      font-style: normal;
+      font-weight: 400;
+      font-display: swap;
+    }
     :root {
-      color-scheme: light;
-      --cp-bg: #f7f4ef;
-      --cp-bg-elevated: #fcfbf8;
+      color-scheme: only light;
+      --cp-bg: #fdefd6;
+      --cp-bg-elevated: #fff8ea;
       --cp-surface: #ffffff;
-      --cp-surface-soft: #f5f5f5;
-      --cp-border: #dedede;
-      --cp-border-strong: #919191;
-      --cp-text: #242424;
-      --cp-text-muted: #5c5c5c;
-      --cp-text-soft: #6f6f6f;
-      --cp-accent: #b11f4b;
-      --cp-accent-hover: #9a1a41;
-      --cp-accent-soft: rgba(177, 31, 75, 0.08);
+      --cp-surface-soft: #f7ead0;
+      --cp-border: #ecd9b0;
+      --cp-border-strong: #d4ab5f;
+      --cp-outline: #24244a;
+      --cp-text: #2a2118;
+      --cp-text-muted: #6f6046;
+      --cp-text-soft: #8b795a;
+      --cp-accent: #e5383b;
+      --cp-accent-hover: #cc2d30;
+      --cp-accent-soft: rgba(229, 56, 59, 0.12);
       --cp-accent-fg: #ffffff;
-      --cp-success: #16a34a;
-      --cp-danger: #dc2626;
-      --cp-warning: #f59e0b;
-      --cp-link: #0078d4;
-      --cp-shadow: 0 18px 48px rgba(0, 0, 0, 0.12);
-      --cp-overlay: rgba(255, 255, 255, 0.8);
-      --cp-panel: rgba(255, 255, 255, 0.86);
-      --cp-panel-strong: rgba(255, 255, 255, 0.96);
+      --cp-gold: #f6ad0f;
+      --cp-purple: #7b3ff2;
+      --cp-success: #2ea44f;
+      --cp-danger: #e5383b;
+      --cp-warning: #f6ad0f;
+      --cp-pending: #9d968c;
+      --cp-retry: #1668dc;
+      --cp-link: #2f6bff;
+      --cp-shadow: 0 18px 48px rgba(36, 36, 74, 0.22);
+      --cp-hard: 0 4px 0 var(--cp-outline);
+      --cp-overlay: rgba(36, 36, 74, 0.55);
+      --cp-panel: rgba(255, 250, 240, 0.9);
+      --cp-panel-strong: rgba(255, 250, 240, 0.97);
       --cp-sheen: rgba(255, 255, 255, 0.55);
-      --cp-highlight: rgba(177, 31, 75, 0.12);
+      --cp-highlight: rgba(46, 164, 79, 0.15);
     }
     html[data-theme="dark"] {
       color-scheme: dark;
-      --cp-bg: #3d3b3a;
-      --cp-bg-elevated: #343231;
-      --cp-surface: #292929;
-      --cp-surface-soft: #2e2e2e;
-      --cp-border: #474747;
-      --cp-border-strong: #5f5f5f;
-      --cp-text: #dedede;
-      --cp-text-muted: #919191;
-      --cp-text-soft: #b0b0b0;
-      --cp-accent: #fd8ea1;
-      --cp-accent-hover: #fb7b91;
-      --cp-accent-soft: rgba(253, 142, 161, 0.14);
-      --cp-accent-fg: #1a1a1a;
+      --cp-bg: #171531;
+      --cp-bg-elevated: #1f1c3d;
+      --cp-surface: #272348;
+      --cp-surface-soft: #302b54;
+      --cp-border: #3d3766;
+      --cp-border-strong: #574f88;
+      --cp-outline: #0b0a18;
+      --cp-text: #f2ecff;
+      --cp-text-muted: #b1a7d6;
+      --cp-text-soft: #cec5ec;
+      --cp-accent: #ff5a5c;
+      --cp-accent-hover: #ff7274;
+      --cp-accent-soft: rgba(255, 90, 92, 0.2);
+      --cp-accent-fg: #ffffff;
+      --cp-gold: #ffc531;
+      --cp-purple: #a97bff;
       --cp-success: #4ade80;
-      --cp-danger: #f87171;
-      --cp-warning: #fbbf24;
-      --cp-link: #4da6ff;
-      --cp-shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
-      --cp-overlay: rgba(41, 41, 41, 0.88);
-      --cp-panel: rgba(41, 41, 41, 0.72);
-      --cp-panel-strong: rgba(41, 41, 41, 0.96);
+      --cp-danger: #ff6b6d;
+      --cp-warning: #ffc531;
+      --cp-pending: #6b648f;
+      --cp-retry: #5aa9ff;
+      --cp-link: #6ea8ff;
+      --cp-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+      --cp-hard: 0 4px 0 var(--cp-outline);
+      --cp-overlay: rgba(9, 8, 20, 0.7);
+      --cp-panel: rgba(31, 28, 61, 0.8);
+      --cp-panel-strong: rgba(31, 28, 61, 0.97);
       --cp-sheen: rgba(255, 255, 255, 0.04);
       --cp-highlight: rgba(253, 142, 161, 0.12);
     }
 
-    * { box-sizing: border-box; }
+    * { box-sizing: border-box; letter-spacing: 0; }
     html { min-width: 320px; }
     body {
       min-height: 100vh;
       margin: 0;
-      background: var(--cp-bg);
+      background:
+        repeating-linear-gradient(90deg, transparent 0 79px, var(--cp-border) 80px),
+        repeating-linear-gradient(0deg, transparent 0 79px, var(--cp-border) 80px),
+        linear-gradient(135deg, var(--cp-bg) 0%, var(--cp-bg-elevated) 52%, var(--cp-bg) 100%);
       color: var(--cp-text);
-      font-family: "Segoe UI", Aptos, Calibri, -apple-system, BlinkMacSystemFont, sans-serif;
+      font-family: "Nunito", "Segoe UI", "PingFang SC", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, sans-serif;
     }
-    button, input, select { font: inherit; }
+    button, input, select, textarea { font: inherit; }
     button, select { cursor: pointer; }
     button:disabled, select:disabled, input:disabled { cursor: not-allowed; opacity: 0.55; }
     code, pre, .mono { font-family: Consolas, "Courier New", Courier, monospace; }
 
     .topbar {
-      position: sticky;
-      z-index: 20;
-      top: 0;
       display: flex;
-      min-height: 68px;
+      min-height: 92px;
       align-items: center;
       justify-content: space-between;
       gap: 20px;
-      padding: 12px 24px;
-      border-bottom: 1px solid var(--cp-border);
-      background: var(--cp-bg-elevated);
+      padding: 8px 24px;
+      background: transparent;
     }
-    .brand { display: flex; min-width: 0; align-items: center; gap: 12px; }
-    .brand-mark {
-      display: grid;
-      width: 40px;
-      height: 40px;
-      flex: 0 0 40px;
-      place-items: center;
-      border: 1px solid var(--cp-accent);
-      border-radius: 10px;
-      background: var(--cp-accent-soft);
-      color: var(--cp-accent);
-      font-size: 20px;
-      font-weight: 800;
-    }
-    .brand h1 { margin: 0; font-size: 19px; letter-spacing: 0; }
-    .brand p { margin: 2px 0 0; color: var(--cp-text-muted); font-size: 12px; }
-    .status-cluster { display: flex; align-items: center; gap: 10px; }
+    .brand { display: flex; min-width: 0; align-items: center; }
+    .brand-logo { display: block; width: 300px; max-width: 100%; height: auto; filter: drop-shadow(0 4px 0 var(--cp-outline)); }
+    .topbar-tools { display: flex; flex: 0 0 auto; align-items: center; gap: 12px; }
     .connection-dot {
-      width: 9px;
-      height: 9px;
+      width: 12px;
+      height: 12px;
+      border: 2px solid var(--cp-outline);
       border-radius: 50%;
       background: var(--cp-border-strong);
     }
     .connection-dot.is-connected { background: var(--cp-success); }
     .status-pill {
-      min-width: 84px;
-      padding: 6px 10px;
-      border: 1px solid var(--cp-border);
-      border-radius: 999px;
-      background: var(--cp-surface);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 2px 4px 2px 0;
       color: var(--cp-text-muted);
       font-size: 12px;
-      font-weight: 700;
-      text-align: center;
+      font-weight: 900;
+      cursor: default;
     }
-    .status-pill[data-status="running"] { border-color: var(--cp-success); color: var(--cp-success); }
+    .status-pill::before {
+      content: "";
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--cp-pending);
+    }
+    .status-pill[data-status="running"] { color: var(--cp-success); }
+    .status-pill[data-status="running"]::before { background: var(--cp-success); }
     .status-pill[data-status="paused"],
-    .status-pill[data-status="pausing"] { border-color: var(--cp-warning); color: var(--cp-warning); }
-    .status-pill[data-status="failed"] { border-color: var(--cp-danger); color: var(--cp-danger); }
-
+    .status-pill[data-status="pausing"] { color: var(--cp-warning); }
+    .status-pill[data-status="paused"]::before,
+    .status-pill[data-status="pausing"]::before { background: var(--cp-warning); }
+    .status-pill[data-status="completed"] { color: var(--cp-success); }
+    .status-pill[data-status="completed"]::before { background: var(--cp-success); }
+    .status-pill[data-status="failed"] { color: var(--cp-danger); }
+    .status-pill[data-status="failed"]::before { background: var(--cp-danger); }
     main { width: min(1480px, calc(100% - 32px)); margin: 0 auto; padding: 20px 0 40px; }
-    .control-band {
+    .job-panel {
       display: grid;
-      grid-template-columns: minmax(180px, 1.2fr) minmax(180px, 1fr) repeat(5, minmax(106px, 0.52fr)) auto;
-      align-items: end;
-      gap: 12px;
+      gap: 14px;
       padding: 16px;
-      border: 1px solid var(--cp-border);
+      border: 2px solid var(--cp-outline);
       border-radius: 16px;
       background: var(--cp-surface);
+      box-shadow: var(--cp-hard);
     }
-    label { display: grid; min-width: 0; gap: 6px; color: var(--cp-text-muted); font-size: 11px; font-weight: 700; }
+    .job-controls {
+      display: flex;
+      flex-wrap: nowrap;
+      align-items: end;
+      gap: 12px;
+      padding-bottom: 14px;
+      border-bottom: 2px dashed var(--cp-border);
+    }
+    .scope-control, .bank-control { width: auto; min-width: 104px; flex: 1 1 200px; max-width: 210px; }
+    .pilot-size-control { width: auto; flex: 0 1 104px; }
+    .concurrency-control { width: auto; flex: 0 1 84px; }
+    label { display: grid; min-width: 0; gap: 6px; color: var(--cp-text-muted); font-size: 11px; font-weight: 900; }
     input, select {
       width: 100%;
       min-height: 38px;
       padding: 7px 10px;
-      border: 1px solid var(--cp-border);
+      border: 2px solid var(--cp-outline);
       border-radius: 10px;
       background: var(--cp-bg-elevated);
       color: var(--cp-text);
       outline: none;
+      box-shadow: 0 2px 0 var(--cp-outline);
     }
     input:focus, select:focus { border-color: var(--cp-accent); }
-    .actions { display: flex; align-items: center; gap: 8px; }
+    .actions { display: flex; flex: 0 0 auto; align-items: center; gap: 8px; margin-left: auto; }
     .command-button {
       display: inline-flex;
       min-height: 38px;
@@ -164,32 +192,87 @@
       justify-content: center;
       gap: 7px;
       padding: 7px 12px;
-      border: 1px solid var(--cp-border);
-      border-radius: 10px;
+      border: 2px solid var(--cp-outline);
+      border-radius: 11px;
       background: var(--cp-surface-soft);
       color: var(--cp-text);
-      font-weight: 700;
+      font-weight: 900;
       white-space: nowrap;
+      box-shadow: var(--cp-hard);
+      transition: transform 80ms ease, box-shadow 80ms ease, background 140ms ease;
     }
     .command-button:hover:not(:disabled) { border-color: var(--cp-border-strong); }
-    .command-button.is-primary { border-color: var(--cp-accent); background: var(--cp-accent); color: var(--cp-accent-fg); }
+    .command-button.is-primary { background: var(--cp-accent); color: var(--cp-accent-fg); }
     .command-button.is-primary:hover:not(:disabled) { background: var(--cp-accent-hover); }
-    .command-button.is-danger { border-color: var(--cp-danger); color: var(--cp-danger); }
-
-    .progress-panel {
-      display: grid;
-      gap: 13px;
-      margin-top: 16px;
-      padding: 18px;
-      border: 1px solid var(--cp-border);
-      border-radius: 16px;
-      background: var(--cp-bg-elevated);
+    .command-button.is-danger { background: var(--cp-surface); color: var(--cp-danger); }
+    .command-button:active:not(:disabled) { transform: translateY(4px); box-shadow: none; }
+    .connection-settings { position: relative; align-self: end; }
+    .connection-settings summary {
+      display: inline-flex;
+      min-height: 38px;
+      align-items: center;
+      padding: 7px 12px;
+      border: 2px solid var(--cp-outline);
+      border-radius: 11px;
+      background: var(--cp-surface-soft);
+      font-size: 11px;
+      font-weight: 800;
+      cursor: pointer;
+      list-style: none;
+      white-space: nowrap;
+      box-shadow: var(--cp-hard);
     }
+    .connection-settings summary::-webkit-details-marker { display: none; }
+    .connection-settings[open] summary { border-color: var(--cp-accent); color: var(--cp-accent); }
+    .connection-settings.needs-attention summary {
+      border-color: var(--cp-accent);
+      background: var(--cp-accent-soft);
+      color: var(--cp-accent);
+      animation: nudge 560ms ease;
+    }
+    @keyframes nudge {
+      0%, 100% { transform: translateX(0); }
+      15% { transform: translateX(-6px); }
+      30% { transform: translateX(6px); }
+      45% { transform: translateX(-4px); }
+      60% { transform: translateX(4px); }
+      75% { transform: translateX(-2px); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .connection-settings.needs-attention summary { animation: none; }
+    }
+    .connection-settings-panel {
+      position: absolute;
+      z-index: 30;
+      top: calc(100% + 8px);
+      left: 0;
+      display: grid;
+      width: min(560px, calc(100vw - 48px));
+      grid-template-columns: 1.2fr 1fr;
+      gap: 12px;
+      padding: 14px;
+      border: 2px solid var(--cp-outline);
+      border-radius: 12px;
+      background: var(--cp-surface);
+      box-shadow: var(--cp-shadow);
+    }
+    .connection-settings-panel .span-all { grid-column: 1 / -1; }
+    .connection-actions { display: flex; grid-column: 1 / -1; flex-wrap: wrap; align-items: center; gap: 10px; }
+    .connection-result { min-width: 0; flex: 1 1 180px; color: var(--cp-text-muted); font-size: 10px; font-weight: 800; line-height: 1.4; }
+    .connection-result.is-ok { color: var(--cp-success); }
+    .connection-result.is-error { color: var(--cp-danger); }
+    .topbar-settings { align-self: center; }
+    .theme-toggle { flex: 0 0 auto; font-size: 16px; line-height: 1; }
+    .topbar-settings .connection-settings-panel { right: 0; left: auto; }
+    .pilot-size-control[hidden] { display: none; }
+
     .progress-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; }
-    .progress-title strong { display: block; font-size: 28px; letter-spacing: 0; }
+    .progress-status { display: flex; align-items: center; gap: 12px; }
+    .progress-title strong { display: block; font-family: "Lilita One", "Arial Black", sans-serif; font-size: 27px; font-weight: 400; letter-spacing: 0; }
+    .progress-count { margin-left: 8px; color: var(--cp-text-muted); font-family: "Nunito", "Segoe UI", "PingFang SC", sans-serif; font-size: 15px; font-weight: 800; }
     .progress-title span, .progress-meta { color: var(--cp-text-muted); font-size: 12px; }
-    .progress-track { height: 10px; overflow: hidden; border-radius: 999px; background: var(--cp-border); }
-    .progress-value { width: 0; height: 100%; border-radius: inherit; background: var(--cp-accent); transition: width 280ms ease; }
+    .progress-track { height: 16px; overflow: hidden; border: 2px solid var(--cp-outline); border-radius: 999px; background: var(--cp-surface-soft); }
+    .progress-value { width: 0; height: 100%; border-right: 2px solid var(--cp-outline); border-radius: inherit; background: linear-gradient(90deg, var(--cp-gold), var(--cp-accent)); transition: width 280ms ease; }
     .progress-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 18px; }
 
     .kpi-grid {
@@ -268,7 +351,6 @@
     .quality-cell.is-pass strong { color: var(--cp-success); }
     .quality-cell.is-warning strong { color: var(--cp-warning); }
     .quality-cell.is-invalid strong { color: var(--cp-danger); }
-    .quality-cell.is-source-conflict strong { color: var(--cp-link); }
 
     .records-panel { margin-top: 16px; overflow: hidden; }
     .table-wrap { max-height: 420px; overflow: auto; }
@@ -281,18 +363,18 @@
     .status-mark.is-pass { color: var(--cp-success); }
     .status-mark.is-warning { color: var(--cp-warning); }
     .status-mark.is-invalid { color: var(--cp-danger); }
-    .status-mark.is-source-conflict { color: var(--cp-link); }
     .preview-cell { max-width: 620px; color: var(--cp-text-muted); line-height: 1.45; }
 
     .banner {
       display: none;
       margin-top: 12px;
       padding: 10px 12px;
-      border: 1px solid var(--cp-danger);
+      border: 2px solid var(--cp-outline);
       border-radius: 10px;
       background: var(--cp-surface);
       color: var(--cp-danger);
       font-size: 12px;
+      box-shadow: var(--cp-hard);
     }
     .banner.is-visible { display: block; }
 
@@ -301,109 +383,245 @@
       max-height: calc(100vh - 40px);
       padding: 0;
       overflow: hidden;
-      border: 1px solid var(--cp-border);
-      border-radius: 16px;
+      border: 3px solid var(--cp-outline);
+      border-radius: 18px;
       background: var(--cp-surface);
       color: var(--cp-text);
-      box-shadow: var(--cp-shadow);
+      box-shadow: 8px 8px 0 var(--cp-outline);
     }
     dialog::backdrop { background: var(--cp-overlay); }
-    .dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--cp-border); }
-    .dialog-head h2 { margin: 0; font-size: 17px; }
-    .icon-button { display: grid; width: 34px; height: 34px; place-items: center; border: 1px solid var(--cp-border); border-radius: 10px; background: var(--cp-surface-soft); color: var(--cp-text); }
+    .dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; border-bottom: 3px solid var(--cp-outline); background: var(--cp-gold); color: var(--cp-outline); }
+    .dialog-head h2 { margin: 0; font-family: "Lilita One", "Arial Black", sans-serif; font-size: 20px; font-weight: 400; }
+    .icon-button { display: grid; width: 34px; height: 34px; place-items: center; border: 2px solid var(--cp-outline); border-radius: 9px; background: var(--cp-surface); color: var(--cp-outline); box-shadow: 0 2px 0 var(--cp-outline); }
     .dialog-body { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr); gap: 18px; max-height: calc(100vh - 110px); overflow: auto; padding: 18px; }
-    .coach-render h3 { margin: 18px 0 8px; font-size: 15px; }
-    .coach-render h3:first-child { margin-top: 0; }
-    .coach-render p, .coach-render li { font-size: 13px; line-height: 1.6; }
-    .coach-render ul { padding-left: 20px; }
-    .example-list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
-    .example-list li { padding: 10px 12px; border-left: 3px solid var(--cp-accent); background: var(--cp-surface-soft); }
-    .example-list p { margin: 0; font-size: 12px; line-height: 1.5; }
-    .example-list small { display: block; margin-top: 5px; color: var(--cp-text-muted); }
-    .issue-list { display: grid; gap: 6px; margin: 12px 0 0; padding: 0; list-style: none; }
+    .record-heading { display: flex; min-width: 0; flex-wrap: wrap; align-items: baseline; gap: 10px; }
+    .record-meta { color: var(--cp-outline); font-size: 11px; font-weight: 800; opacity: 0.78; }
+    .record-head-tools { display: flex; flex: 0 0 auto; align-items: center; gap: 12px; }
+    .record-status { display: inline-flex; align-items: center; gap: 6px; color: var(--cp-outline); font-size: 11px; font-weight: 900; white-space: nowrap; }
+    .record-status::before { content: ""; width: 10px; height: 10px; border: 2px solid var(--cp-outline); border-radius: 3px; background: var(--state-color, var(--cp-pending)); }
+    .record-status[data-state="pass"] { --state-color: var(--cp-success); }
+    .record-status[data-state="warning"] { --state-color: var(--cp-warning); }
+    .record-status[data-state="invalid"] { --state-color: var(--cp-danger); }
+    .record-status[data-state="failed"] { --state-color: var(--cp-danger); }
+    .record-status[data-state="pending"] { --state-color: var(--cp-pending); }
+    .record-status[data-state="processing"] { --state-color: var(--cp-purple); }
+    .record-status[data-state="retrying"] { --state-color: var(--cp-retry); }
+    .record-body { display: grid; gap: 14px; max-height: calc(100vh - 110px); overflow: auto; padding: 18px; }
+    .detail-meta { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+    .detail-meta div { padding: 9px; border: 2px solid var(--cp-outline); border-radius: 9px; background: var(--cp-bg-elevated); box-shadow: 0 2px 0 var(--cp-outline); }
+    .detail-meta span { display: block; color: var(--cp-text-muted); font-size: 8px; }
+    .detail-meta strong { display: block; margin-top: 4px; font-size: 11px; }
+    .detail-summary { display: grid; gap: 6px; padding: 11px 12px; border-left: 5px solid var(--cp-accent); border-radius: 0 9px 9px 0; background: var(--cp-surface-soft); }
+    .detail-summary[hidden] { display: none; }
+    .detail-summary h3, .detail-events-section h3 { margin: 0; font-size: 11px; }
+    .detail-summary p { margin: 0; color: var(--cp-text-muted); font-size: 11px; line-height: 1.55; }
+    .detail-summary-links { display: flex; flex-wrap: wrap; gap: 6px; }
+    .detail-summary-links[hidden] { display: none; }
+    .sense-jump {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 7px;
+      border: 1px solid var(--cp-retry);
+      border-radius: 6px;
+      background: var(--cp-bg-elevated);
+      color: var(--cp-retry);
+      font-size: 9px;
+      font-weight: 900;
+      text-decoration: none;
+    }
+    .sense-jump:hover { background: var(--cp-surface); }
+    .sense-card-list { display: grid; gap: 14px; margin: 0; padding: 0; list-style: none; counter-reset: sense; }
+    .sense-card {
+      display: grid;
+      gap: 9px;
+      padding: 13px 15px;
+      border: 2px solid var(--cp-outline);
+      border-radius: 12px;
+      background: var(--cp-bg-elevated);
+      box-shadow: 0 3px 0 var(--cp-outline);
+    }
+    .sense-card.is-target { border-color: var(--cp-retry); box-shadow: 0 3px 0 var(--cp-retry); }
+    .sense-card.is-jump-target { animation: sense-focus 900ms ease; }
+    .sense-card:focus-visible { outline: 3px solid var(--cp-retry); outline-offset: 3px; }
+    @keyframes sense-focus {
+      0%, 100% { background: var(--cp-bg-elevated); }
+      35% { background: var(--cp-accent-soft); box-shadow: 0 0 0 4px var(--cp-retry); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .sense-card.is-jump-target { animation: none; outline: 4px solid var(--cp-retry); }
+    }
+    .sense-card-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+    .sense-card-index {
+      display: grid;
+      min-width: 22px;
+      height: 22px;
+      place-items: center;
+      padding: 0 5px;
+      border: 2px solid var(--cp-outline);
+      border-radius: 7px;
+      background: var(--cp-gold);
+      color: var(--cp-outline);
+      font-size: 11px;
+      font-weight: 900;
+    }
+    .sense-card-label {
+      display: inline-flex;
+      align-items: center;
+      padding: 1px 6px;
+      border: 1px solid var(--cp-border-strong);
+      border-radius: 5px;
+      background: var(--cp-surface-soft);
+      color: var(--cp-text-muted);
+      font-size: 9px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+    .sense-card-gloss { font-size: 15px; font-weight: 800; }
+    .sense-card-state { margin-left: auto; color: var(--cp-text-muted); font-size: 9px; font-weight: 900; }
+    .sense-note { margin: 0; font-size: 12px; line-height: 1.6; }
+    .sense-note b { color: var(--cp-text-muted); font-size: 10px; font-weight: 900; }
+    .sense-example {
+      display: grid;
+      gap: 4px;
+      padding: 9px 11px;
+      border-left: 4px solid var(--cp-accent);
+      border-radius: 0 8px 8px 0;
+      background: var(--cp-surface-soft);
+    }
+    .sense-example p { margin: 0; font-size: 12.5px; line-height: 1.5; }
+    .sense-example small { color: var(--cp-text-muted); font-size: 11px; }
+    .sense-example-source { justify-self: start; margin-top: 2px; color: var(--cp-text-soft); font-size: 9px; font-weight: 900; }
+    .sense-card-missing { color: var(--cp-text-muted); font-size: 11px; }
+    .sense-card-actions { display: flex; justify-content: flex-end; }
+    .sense-card-actions .command-button { min-height: 30px; padding: 4px 8px; font-size: 9px; box-shadow: 0 2px 0 var(--cp-outline); }
+    .issue-list { display: grid; gap: 6px; margin: 0 0 14px; padding: 0; list-style: none; }
     .issue-list li { color: var(--cp-warning); font-size: 11px; }
+    .issue-list:empty { display: none; }
+
+    .kpi-grid, .workspace-grid, .records-panel { display: none; }
+    .word-map-panel { margin-top: 18px; overflow: hidden; border: 2px solid var(--cp-outline); border-radius: 18px; background: var(--cp-surface); box-shadow: var(--cp-hard); }
+    .word-map-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 16px 18px; border-bottom: 2px solid var(--cp-outline); background: var(--cp-surface-soft); }
+    .word-map-head h2 { margin: 0; font-family: "Lilita One", "Arial Black", sans-serif; font-size: 21px; font-weight: 400; }
+    .word-map-head p { margin: 4px 0 0; color: var(--cp-text-muted); font-size: 10px; }
+    .word-map-tools { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+    .word-filter { display: inline-flex; min-height: 32px; align-items: center; gap: 5px; padding: 5px 9px; border: 2px solid var(--cp-outline); border-radius: 9px; background: var(--cp-surface); color: var(--cp-text-muted); font-size: 9px; font-weight: 900; box-shadow: 0 2px 0 var(--cp-outline); transition: transform 80ms ease, box-shadow 80ms ease, background 120ms ease; }
+    .word-filter::before { content: ""; width: 8px; height: 8px; border-radius: 2px; background: var(--state-color, var(--cp-border)); }
+    .word-filter.is-active { background: var(--cp-gold); color: var(--cp-outline); box-shadow: 0 2px 0 var(--cp-outline), inset 0 0 0 2px var(--cp-sheen); }
+    .word-filter:active { transform: translateY(2px); box-shadow: none; }
+    .word-filter[data-state="all"] { --state-color: var(--cp-text-muted); }
+    .word-filter[data-state="all"]::before { display: none; }
+    .word-filter[data-state="pending"] { --state-color: var(--cp-pending); }
+    .word-filter[data-state="processing"] { --state-color: var(--cp-purple); }
+    .word-filter[data-state="retrying"] { --state-color: var(--cp-retry); }
+    .word-filter[data-state="pass"] { --state-color: var(--cp-success); }
+    .word-filter[data-state="warning"] { --state-color: var(--cp-warning); }
+    .word-filter[data-state="failed"] { --state-color: var(--cp-danger); }
+    .word-filter-label { align-self: center; margin-right: 2px; color: var(--cp-text-muted); font-size: 9px; font-weight: 900; }
+    .word-map-zoom { display: inline-flex; align-items: center; gap: 4px; margin-left: 4px; }
+    .word-map-zoom button { display: grid; width: 32px; height: 32px; place-items: center; border: 2px solid var(--cp-outline); border-radius: 9px; background: var(--cp-surface); color: var(--cp-text); font-weight: 900; box-shadow: 0 2px 0 var(--cp-outline); }
+    .word-map-zoom span { min-width: 42px; color: var(--cp-text-muted); font-size: 9px; text-align: center; }
+    .word-map-scroll { position: relative; overflow: visible; padding: 16px; background: repeating-linear-gradient(135deg, var(--cp-bg-elevated) 0 12px, var(--cp-surface-soft) 12px 13px); }
+    #word-grid-canvas { display: block; outline: none; cursor: crosshair; }
+    #word-grid-canvas:focus-visible { box-shadow: 0 0 0 2px var(--cp-accent); }
+    .word-map-tooltip { position: fixed; z-index: 80; display: none; max-width: 240px; padding: 8px 10px; border: 2px solid var(--cp-outline); border-radius: 9px; background: var(--cp-panel-strong); color: var(--cp-text); box-shadow: var(--cp-hard); font-size: 10px; line-height: 1.4; pointer-events: none; }
+    .word-map-tooltip.is-visible { display: block; }
+    .word-map-footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; padding: 9px 14px; border-top: 2px solid var(--cp-outline); background: var(--cp-surface-soft); color: var(--cp-text-muted); font-size: 9px; font-weight: 800; }
+
+    .detail-events-section { display: grid; gap: 7px; }
+    .detail-events { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+    .detail-events li { padding: 7px 8px; border-left: 3px solid var(--cp-border-strong); background: var(--cp-surface-soft); font-size: 9px; }
 
     @media (max-width: 1100px) {
-      .control-band { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-      .actions { grid-column: 1 / -1; }
       .kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     }
     @media (max-width: 760px) {
-      .topbar { align-items: flex-start; padding: 12px 16px; }
-      .brand p { display: none; }
+      .topbar { display: grid; min-height: 72px; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 7px 10px; }
+      .brand-logo { width: 184px; filter: drop-shadow(0 3px 0 var(--cp-outline)); }
+      .topbar-tools { gap: 7px; }
+      .topbar-tools .connection-dot { display: none; }
+      .topbar-settings summary { min-height: 34px; padding: 5px 8px; font-size: 9px; box-shadow: 0 2px 0 var(--cp-outline); }
+      .status-pill { font-size: 10px; }
       main { width: min(100% - 20px, 1480px); padding-top: 12px; }
-      .control-band { grid-template-columns: 1fr 1fr; padding: 12px; }
-      .control-band label:first-child,
-      .control-band label:nth-child(2),
-      .control-band label:nth-child(7) { grid-column: 1 / -1; }
-      .actions { flex-wrap: wrap; }
+      .job-panel { padding: 12px; }
+      .job-controls { display: grid; flex-wrap: wrap; grid-template-columns: 1fr 1fr; }
+      .scope-control, .bank-control, .pilot-size-control, .concurrency-control { width: auto; max-width: none; }
+      .connection-settings-panel { position: fixed; top: 76px; right: 10px; left: 10px; width: auto; grid-template-columns: 1fr; }
+      .actions { width: auto; grid-column: 1 / -1; flex-wrap: wrap; justify-content: flex-end; }
       .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .quality-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .workspace-grid { grid-template-columns: 1fr; }
       .dialog-body { grid-template-columns: 1fr; }
       .preview-cell { min-width: 280px; }
+      body[data-running="true"] .job-controls { grid-template-columns: 1fr; padding-bottom: 10px; }
+      body[data-running="true"] .job-controls > :not(.actions) { display: none; }
+      body[data-running="true"] .job-controls .actions { grid-column: 1; justify-content: flex-end; }
+      body[data-running="true"] .job-controls #rescan { display: none; }
+      .word-map-head { flex-direction: column; }
+      .word-map-tools { justify-content: flex-start; }
+      .word-map-scroll { padding: 10px; }
+      .detail-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
+
   </style>
 </head>
 <body>
   <header class="topbar">
     <div class="brand">
-      <div class="brand-mark" aria-hidden="true">W</div>
-      <div>
-        <h1>词汇教练语料生成</h1>
-        <p>WordBuddy · 静态讲解分片与质量控制</p>
-      </div>
+      <img class="brand-logo" src="/word-quest-lexicon-forge-logo.png" alt="Word Quest: Lexicon Forge">
     </div>
-    <div class="status-cluster">
+    <div class="topbar-tools">
       <span id="connection-dot" class="connection-dot" title="状态流连接"></span>
-      <span id="job-status" class="status-pill" data-status="idle">空闲</span>
+      <button id="theme-toggle" class="icon-button theme-toggle" type="button" aria-label="切换明暗模式" title="切换明暗模式">◑</button>
+      <details id="connection-settings" class="connection-settings topbar-settings">
+        <summary>模型设置</summary>
+        <div class="connection-settings-panel">
+          <label>模型端点<input id="endpoint" type="url" spellcheck="false"></label>
+          <label>模型 ID<input id="model" type="text" spellcheck="false"></label>
+          <label class="span-all">API Key<input id="api-key" type="password" spellcheck="false" autocomplete="off" placeholder="本地模型可填任意占位值"></label>
+          <div class="connection-actions">
+            <button id="connection-test" class="command-button is-primary" type="button">测试并保存</button>
+            <span id="connection-result" class="connection-result">测试成功后自动保存。</span>
+          </div>
+        </div>
+      </details>
     </div>
   </header>
 
   <main>
-    <section class="control-band" aria-label="生成任务设置">
-      <label>模型端点<input id="endpoint" type="url" spellcheck="false"></label>
-      <label>模型 ID<input id="model" type="text" spellcheck="false"></label>
-      <label>范围
-        <select id="scope">
-          <option value="pilot">质量试跑</option>
-          <option value="bank">完整词库</option>
-          <option value="all">全部唯一词</option>
-        </select>
-      </label>
-      <label>词库
-        <select id="bank">
-          <option value="gaokao">高考词汇</option>
-          <option value="cet4">CET-4</option>
-          <option value="cet6">CET-6</option>
-          <option value="ielts">IELTS</option>
-          <option value="toefl">TOEFL</option>
-        </select>
-      </label>
-      <label>试跑词数<input id="pilot-size" type="number" min="1" max="200" value="20"></label>
-      <label>并发<input id="concurrency" type="number" min="1" max="16" value="2"></label>
-      <label>质量模式
-        <select id="quality-mode">
-          <option value="unreviewed" selected>无审查 · 提示词直出</option>
-          <option value="balanced">平衡 · 高风险审校</option>
-          <option value="strict">严格 · 逐词审校</option>
-        </select>
-      </label>
-      <div class="actions">
-        <button id="start" class="command-button is-primary" type="button" title="开始或从磁盘检查点继续">▶ 开始 / 继续</button>
-        <button id="pause" class="command-button is-danger" type="button" title="暂停生成，已写入分片的内容会保留">❚❚ 暂停</button>
-        <button id="rescan" class="command-button" type="button" title="重新扫描分片和质量状态">↻ 复核</button>
+    <section class="job-panel" aria-labelledby="progress-heading">
+      <div class="job-controls">
+        <label class="scope-control">范围
+          <select id="scope">
+            <option value="pilot">质量试跑</option>
+            <option value="bank">完整词库</option>
+            <option value="all">全部唯一词</option>
+          </select>
+        </label>
+        <label class="bank-control">词库
+          <select id="bank">
+            <option value="gaokao">高考词汇</option>
+            <option value="cet4">CET-4</option>
+            <option value="cet6">CET-6</option>
+            <option value="ielts">IELTS</option>
+            <option value="toefl">TOEFL</option>
+          </select>
+        </label>
+        <label class="pilot-size-control">试跑词数<input id="pilot-size" type="number" min="1" max="200" value="20"></label>
+        <label class="concurrency-control">并发<input id="concurrency" type="number" min="1" max="16" value="2"></label>
+        <div class="actions">
+          <button id="run-toggle" class="command-button is-primary" type="button" title="开始或从磁盘检查点继续">▶ 开始 / 继续</button>
+          <button id="rescan" class="command-button" type="button" title="重新读取磁盘上的分片，刷新完成度、质量与例句缺口统计">↻ 重新扫描</button>
+        </div>
       </div>
-    </section>
-    <p id="error-banner" class="banner" role="alert"></p>
-
-    <section class="progress-panel" aria-labelledby="progress-heading">
       <div class="progress-head">
         <div class="progress-title">
           <span id="progress-scope">质量试跑</span>
-          <strong id="progress-heading">0 / 20</strong>
+          <strong id="progress-heading"><span id="progress-percent">0%</span><span id="progress-count" class="progress-count">（0 / 20）</span></strong>
         </div>
-        <div id="progress-percent" class="mono">0.00%</div>
+        <div class="progress-status">
+          <span id="job-status" class="status-pill" data-status="idle">空闲</span>
+        </div>
       </div>
       <div class="progress-track" role="progressbar" aria-label="语料生成进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
         <div id="progress-value" class="progress-value"></div>
@@ -411,9 +629,11 @@
       <div class="progress-meta">
         <span id="throughput">等待速度样本</span>
         <span id="eta">ETA 待计算</span>
+        <span id="sense-gap">例句缺口待统计</span>
         <span id="model-state">模型未连接</span>
       </div>
     </section>
+    <p id="error-banner" class="banner" role="alert"></p>
 
     <section class="kpi-grid" aria-label="生成指标">
       <article class="kpi"><span>目标剩余</span><strong id="kpi-remaining">0</strong><small id="kpi-remaining-note">当前任务</small></article>
@@ -423,6 +643,38 @@
       <article class="kpi"><span id="kpi-corpus-label">当前词库覆盖</span><strong id="kpi-corpus">0.00%</strong><small id="kpi-corpus-detail">0 / 0</small></article>
       <article class="kpi"><span>分片体积</span><strong id="kpi-storage">0 B</strong><small id="kpi-shards">0 个分片</small></article>
     </section>
+
+    <section class="word-map-panel" aria-labelledby="word-map-heading">
+      <div class="word-map-head">
+        <div>
+          <h2 id="word-map-heading">单词生成状态图</h2>
+          <p>每个方块代表一个单词，按关卡生成顺序排列；点击方块查看内容与操作。</p>
+        </div>
+        <div id="word-map-tools" class="word-map-tools" aria-label="按状态筛选单词">
+          <span class="word-filter-label">筛选</span>
+          <button class="word-filter is-active" type="button" data-state="all">全部 <b id="grid-count-all">0</b></button>
+          <button class="word-filter" type="button" data-state="pass">通过 <b id="grid-count-pass">0</b></button>
+          <button class="word-filter" type="button" data-state="processing">处理中 <b id="grid-count-processing">0</b></button>
+          <button class="word-filter" type="button" data-state="retrying">重试中 <b id="grid-count-retrying">0</b></button>
+          <button class="word-filter" type="button" data-state="pending">待处理 <b id="grid-count-pending">0</b></button>
+          <button class="word-filter" type="button" data-state="warning">警告 <b id="grid-count-warning">0</b></button>
+          <button class="word-filter" type="button" data-state="failed">失败 <b id="grid-count-failed">0</b></button>
+          <span class="word-map-zoom">
+            <button id="word-map-zoom-out" type="button" aria-label="缩小方块" title="缩小方块">−</button>
+            <span id="word-map-zoom-label">8 px</span>
+            <button id="word-map-zoom-in" type="button" aria-label="放大方块" title="放大方块">+</button>
+          </span>
+        </div>
+      </div>
+      <div id="word-map-scroll" class="word-map-scroll">
+        <canvas id="word-grid-canvas" tabindex="0" aria-label="单词生成状态矩阵"></canvas>
+      </div>
+      <div class="word-map-footer">
+        <span id="word-map-activity">等待生成状态</span>
+        <span id="word-map-selection">未选择单词</span>
+      </div>
+    </section>
+    <div id="word-map-tooltip" class="word-map-tooltip" role="tooltip"></div>
 
     <div class="workspace-grid">
       <div class="panel-stack">
@@ -443,7 +695,7 @@
             <div class="quality-bar">
               <div class="quality-cell is-pass"><strong id="quality-pass">0</strong><span>硬检通过</span></div>
               <div class="quality-cell is-warning"><strong id="quality-warning">0</strong><span>内容警告</span></div>
-              <div class="quality-cell is-source-conflict"><strong id="quality-source-conflict">0</strong><span>源冲突</span></div>
+              <div class="quality-cell"><strong id="quality-example-gap">0</strong><span>待补例句</span></div>
               <div class="quality-cell is-invalid"><strong id="quality-invalid">0</strong><span>无效</span></div>
             </div>
           </div>
@@ -468,36 +720,69 @@
         </table>
       </div>
     </section>
+
   </main>
 
   <dialog id="record-dialog">
     <div class="dialog-head">
-      <h2 id="record-title">讲解详情</h2>
-      <button id="record-close" class="icon-button" type="button" aria-label="关闭">×</button>
+      <div class="record-heading">
+        <h2 id="record-title">讲解详情</h2>
+        <span id="record-meta" class="record-meta"></span>
+      </div>
+      <div class="record-head-tools">
+        <span id="record-status" class="record-status"></span>
+        <button id="record-close" class="icon-button" type="button" aria-label="关闭">×</button>
+      </div>
     </div>
-    <div class="dialog-body">
-      <section>
-        <div id="coach-render" class="coach-render"></div>
-        <ul id="issue-list" class="issue-list"></ul>
+    <div class="record-body">
+      <div id="detail-meta" class="detail-meta"></div>
+      <section id="detail-summary" class="detail-summary" hidden>
+        <h3 id="detail-summary-title">当前状态</h3>
+        <p id="detail-message"></p>
+        <div id="detail-summary-links" class="detail-summary-links" hidden></div>
+        <div id="detail-summary-actions" class="detail-summary-actions" hidden>
+          <button id="detail-retry-all" class="command-button is-primary" type="button">↻ 全部重试</button>
+        </div>
       </section>
-      <section>
-        <h3>逐义例句</h3>
-        <ul id="example-list" class="example-list"></ul>
+      <ul id="issue-list" class="issue-list"></ul>
+      <ol id="sense-card-list" class="sense-card-list"></ol>
+      <section class="detail-events-section">
+        <h3>最近事件</h3>
+        <ul id="detail-events" class="detail-events"></ul>
       </section>
     </div>
   </dialog>
 
   <script>
     const elements = Object.fromEntries([
-      'endpoint','model','scope','bank','pilot-size','concurrency','quality-mode','start','pause','rescan',
+      'endpoint','model','api-key','connection-settings','connection-test','connection-result',
+      'scope','bank','pilot-size','concurrency','run-toggle','rescan','theme-toggle',
       'connection-dot','job-status','error-banner','progress-scope','progress-heading',
-      'progress-percent','progress-value','throughput','eta','model-state','kpi-remaining','kpi-remaining-note',
+      'progress-percent','progress-count','progress-value','throughput','eta','sense-gap','model-state','kpi-remaining','kpi-remaining-note',
       'kpi-pass','kpi-warning','kpi-invalid','kpi-corpus','kpi-corpus-label','kpi-corpus-detail','kpi-storage','kpi-shards',
       'active-count','active-list','event-list','scan-time','quality-pass','quality-warning',
-      'quality-source-conflict','quality-invalid','failure-count','failure-list','pilot-count','pilot-list','records-body',
-      'record-dialog','record-title','record-close','coach-render','issue-list','example-list',
+      'quality-example-gap','quality-invalid','failure-count','failure-list','pilot-count','pilot-list','records-body',
+      'record-dialog','record-title','record-meta','record-status','record-close','detail-meta',
+      'detail-summary','detail-summary-title','detail-message','detail-summary-links',
+      'detail-summary-actions','detail-retry-all',
+      'issue-list','sense-card-list','detail-events',
+      'word-map-tools','word-map-scroll','word-grid-canvas','word-map-tooltip','word-map-activity','word-map-selection',
+      'word-map-zoom-out','word-map-zoom-in','word-map-zoom-label',
+      'grid-count-all','grid-count-pass','grid-count-processing','grid-count-retrying','grid-count-pending',
+      'grid-count-warning','grid-count-failed',
     ].map(id => [id, document.getElementById(id)]));
     let currentStatus = null;
+    let wordGrid = { revision: 0, cells: [], counts: {} };
+    let wordGridById = new Map();
+    let wordGridFilter = 'all';
+    let wordGridCellSize = 8;
+    let wordGridLayout = null;
+    let wordGridSelectedIndex = -1;
+    let wordGridAnimation = null;
+    let wordGridAnimationTimer = null;
+    let wordGridResizeTimer = null;
+    let currentWordDetail = null;
+    const wordGridChangedAt = new Map();
     let controlsInitialized = false;
 
     const statusLabels = {
@@ -505,13 +790,18 @@
       completed: '已完成', failed: '失败',
     };
     const eventMeta = {
-      'job-started': ['▶', '任务开始'], 'word-start': ['⋯', '开始生成'],
+      'job-started': ['▶', '任务开始'], 'word-start': ['⋯', '开始处理'],
       'word-retry': ['↻', '质量重试'], 'word-complete': ['✓', '通过并写盘'],
-      'word-blocked': ['◇', '源词典冲突'],
+      'word-partial-complete': ['✓', '义项已更新'],
+      'word-writing': ['◆', '写入分片'],
       'word-failed': ['!', '生成失败'], 'batch-complete': ['◆', '批次写盘'],
       'job-paused': ['❚❚', '任务暂停'], 'job-finished': ['■', '任务结束'],
       'pause-requested': ['❚❚', '请求暂停'], 'corpus-rescanned': ['↻', '语料复核'],
       stderr: ['!', '进程错误'], log: ['·', '生成日志'], plan: ['◇', '任务计划'],
+    };
+    const wordGridStateLabels = {
+      pending: '待处理', processing: '处理中', retrying: '重试中', pass: '质量通过',
+      warning: '通过 · 有警告', failed: '失败',
     };
 
     function escapeHtml(value) {
@@ -547,20 +837,210 @@
       elements['error-banner'].classList.toggle('is-visible', Boolean(message));
     }
 
+    function cpColor(name) {
+      return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    }
+
+    function recountWordGrid() {
+      const counts = { pending: 0, processing: 0, retrying: 0, pass: 0, warning: 0, failed: 0 };
+      wordGrid.cells.forEach(cell => { counts[cell.state] = (counts[cell.state] || 0) + 1; });
+      wordGrid.counts = counts;
+      elements['grid-count-all'].textContent = wordGrid.cells.length;
+      Object.entries(counts).forEach(([state, count]) => {
+        const element = elements[`grid-count-${state}`];
+        if (element) element.textContent = count;
+      });
+    }
+
+    async function fetchWordGrid() {
+      const response = await fetch('/api/grid', { cache: 'no-store' });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || '读取单词状态图失败。');
+      wordGrid = payload;
+      wordGridById = new Map(wordGrid.cells.map(cell => [cell.wordId, cell]));
+      recountWordGrid();
+      requestWordGridDraw();
+    }
+
+    function applyWordGridDelta(delta) {
+      if (!delta) return;
+      if (delta.type === 'refresh') {
+        void fetchWordGrid().catch(error => setError(error.message));
+        if (currentWordDetail && elements['record-dialog'].open) {
+          void openWordDetail(currentWordDetail.cell.wordId, true);
+        }
+        return;
+      }
+      const cell = wordGridById.get(delta.wordId);
+      if (!cell) return;
+      Object.assign(cell, delta);
+      wordGrid.revision = Math.max(wordGrid.revision || 0, delta.revision || 0);
+      wordGridChangedAt.set(delta.wordId, performance.now());
+      recountWordGrid();
+      requestWordGridDraw();
+      if (currentWordDetail?.cell.wordId === delta.wordId && elements['record-dialog'].open) {
+        void openWordDetail(delta.wordId, true);
+      }
+    }
+
+    function requestWordGridDraw() {
+      if (wordGridAnimation) cancelAnimationFrame(wordGridAnimation);
+      if (wordGridAnimationTimer) clearTimeout(wordGridAnimationTimer);
+      wordGridAnimation = requestAnimationFrame(drawWordGrid);
+    }
+
+    function drawWordGrid(timestamp = performance.now()) {
+      wordGridAnimation = null;
+      const canvas = elements['word-grid-canvas'];
+      const scroll = elements['word-map-scroll'];
+      if (!canvas || !scroll || wordGrid.cells.length === 0) return;
+      const gap = wordGridCellSize <= 8 ? 1 : 2;
+      const pitch = wordGridCellSize + gap;
+      const scrollStyle = getComputedStyle(scroll);
+      const horizontalPadding = parseFloat(scrollStyle.paddingLeft) + parseFloat(scrollStyle.paddingRight);
+      const availableWidth = Math.max(280, scroll.clientWidth - horizontalPadding);
+      const columns = Math.max(1, Math.floor(availableWidth / pitch));
+      const rows = Math.ceil(wordGrid.cells.length / columns);
+      const cssWidth = availableWidth;
+      const cssHeight = Math.max(wordGridCellSize, (rows * pitch) - gap);
+      const ratio = Math.min(2, window.devicePixelRatio || 1);
+      if (canvas.width !== Math.round(cssWidth * ratio) || canvas.height !== Math.round(cssHeight * ratio)) {
+        canvas.width = Math.round(cssWidth * ratio);
+        canvas.height = Math.round(cssHeight * ratio);
+        canvas.style.width = `${cssWidth}px`;
+        canvas.style.height = `${cssHeight}px`;
+      }
+      const context = canvas.getContext('2d');
+      context.setTransform(ratio, 0, 0, ratio, 0, 0);
+      context.clearRect(0, 0, cssWidth, cssHeight);
+      const colors = {
+        pending: cpColor('--cp-pending'), processing: cpColor('--cp-purple'),
+        retrying: cpColor('--cp-retry'), pass: cpColor('--cp-success'),
+        warning: cpColor('--cp-warning'), failed: cpColor('--cp-danger'),
+      };
+      const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      let needsAnimation = false;
+      wordGrid.cells.forEach((cell, index) => {
+        const x = (index % columns) * pitch;
+        const y = Math.floor(index / columns) * pitch;
+        const matches = wordGridFilter === 'all' || cell.state === wordGridFilter;
+        const dynamic = cell.state === 'processing' || cell.state === 'retrying';
+        context.globalAlpha = matches ? 1 : 0.14;
+        context.fillStyle = colors[cell.state] || colors.pending;
+        context.fillRect(x, y, wordGridCellSize, wordGridCellSize);
+        if (dynamic && matches) {
+          context.fillStyle = cpColor('--cp-surface');
+          const markerSize = Math.max(2, Math.floor(wordGridCellSize / 3));
+          context.fillRect(x + wordGridCellSize - markerSize, y, markerSize, markerSize);
+        }
+        if (index === wordGridSelectedIndex) {
+          context.globalAlpha = 1;
+          context.strokeStyle = cpColor('--cp-text');
+          context.lineWidth = 2;
+          context.strokeRect(x - 1, y - 1, wordGridCellSize + 2, wordGridCellSize + 2);
+        }
+        const changedAt = wordGridChangedAt.get(cell.wordId);
+        if (changedAt && timestamp - changedAt < 900 && !reducedMotion) {
+          context.globalAlpha = 1 - ((timestamp - changedAt) / 900);
+          context.strokeStyle = cpColor('--cp-accent');
+          context.lineWidth = 2;
+          context.strokeRect(x - 2, y - 2, wordGridCellSize + 4, wordGridCellSize + 4);
+          needsAnimation = true;
+        }
+      });
+      context.globalAlpha = 1;
+      wordGridLayout = { columns, pitch, cellSize: wordGridCellSize, width: cssWidth, height: cssHeight };
+      if (needsAnimation) {
+        wordGridAnimationTimer = setTimeout(() => {
+          wordGridAnimation = requestAnimationFrame(drawWordGrid);
+        }, 160);
+      }
+    }
+
+    function gridCellFromPointer(event) {
+      if (!wordGridLayout) return null;
+      const rect = elements['word-grid-canvas'].getBoundingClientRect();
+      const x = event.clientX - rect.left;
+      const y = event.clientY - rect.top;
+      const column = Math.floor(x / wordGridLayout.pitch);
+      const row = Math.floor(y / wordGridLayout.pitch);
+      if ((x % wordGridLayout.pitch) >= wordGridLayout.cellSize || (y % wordGridLayout.pitch) >= wordGridLayout.cellSize) return null;
+      return wordGrid.cells[(row * wordGridLayout.columns) + column] ?? null;
+    }
+
+    function selectWordGridCell(cell) {
+      if (!cell) return;
+      wordGridSelectedIndex = cell.index;
+      elements['word-map-selection'].textContent = `${cell.word} · ${wordGridStateLabels[cell.state]} · 第 ${cell.index + 1}/${wordGrid.cells.length}`;
+      requestWordGridDraw();
+    }
+
+    function openWordCell(cell) {
+      if (cell) void openWordDetail(cell.wordId);
+    }
+
+    /**
+     * Every state answers "what happened" and "what can I do about it" so the
+     * dialog never leaves a dead end.
+     */
+    function detailSummary(cell, lastEvent, isRunning) {
+      if (cell.state === 'failed') {
+        const reason = lastEvent?.message || '生成未通过质量校验。';
+        return {
+          title: '部分义项未通过',
+          message: `${reason} 已通过义项会保留；可在对应义项卡片中单独重生成。若同一义项连续失败，可调低并发或换更强的模型。`,
+        };
+      }
+      if (cell.state === 'pending') {
+        return {
+          title: '尚未生成',
+          message: isRunning ? '已在队列中，等待空闲并发通道。' : '点击顶部“开始 / 继续”批量生成，或在任意义项卡片中只生成该义项。',
+        };
+      }
+      if (['processing', 'retrying'].includes(cell.state)) {
+        return { title: '正在生成', message: lastEvent?.message || '模型推理中，请稍候。' };
+      }
+      if (cell.state === 'warning') {
+        return {
+          title: '已通过，但有警告',
+          message: '内容已入库可用。可直接检查各义项结果，并只重生成不满意的义项。',
+        };
+      }
+      return {
+        title: '已完成',
+        message: '全部义项已通过硬性校验并写入分片；仍可单独重生成任意义项。',
+      };
+    }
+
     function initializeControls(status) {
       if (controlsInitialized) return;
       elements.endpoint.value = status.settings.endpoint;
       elements.model.value = status.settings.model;
+      elements['api-key'].placeholder = status.settings.apiKeyConfigured
+        ? '已配置（如需更换请重新输入）'
+        : '本地模型可填任意占位值';
       elements.scope.value = status.job.scope;
       elements.bank.value = status.job.bank;
       elements['pilot-size'].value = status.job.pilotSize;
       elements.concurrency.value = status.settings.concurrency;
-      elements['quality-mode'].value = status.settings.qualityMode || 'unreviewed';
       controlsInitialized = true;
     }
 
+    function nudgeConnectionSettings(message) {
+      const holder = elements['connection-settings'];
+      holder.open = true;
+      holder.classList.remove('needs-attention');
+      void holder.offsetWidth;
+      holder.classList.add('needs-attention');
+      setTimeout(() => holder.classList.remove('needs-attention'), 1600);
+      elements['connection-result'].textContent = message;
+      elements['connection-result'].className = 'connection-result is-error';
+      elements['api-key'].focus();
+    }
+
     function eventDescription(event) {
-      if (event.type === 'word-start') return `${event.word} · ${event.phase === 'review' ? '语义审校' : '内容生成'} · 第 ${event.attempt}/${event.maxAttempts} 次`;
+      if (event.type === 'word-start') return `${event.word} · 内容生成 · 第 ${event.attempt}/${event.maxAttempts} 次`;
+      if (event.type === 'word-writing') return `${event.word} · 内容通过，正在写入分片`;
       if (event.type === 'word-complete') return `${event.word} · ${(event.durationMs / 1000).toFixed(1)} 秒${event.qualityWarnings?.length ? ` · ${event.qualityWarnings.length} 条警告` : ''}`;
       if (event.type === 'word-retry' || event.type === 'word-failed') return `${event.word || event.wordId} · ${event.message || ''}`;
       if (event.type === 'batch-complete') return `${event.processed}/${event.pending} 已处理 · ${event.saved} 保存 · ${event.failed} 失败`;
@@ -573,25 +1053,30 @@
       currentStatus = status;
       initializeControls(status);
       const running = status.job.status === 'running' || status.job.status === 'pausing';
+      document.body.dataset.running = String(running);
       const percent = Math.min(100, Math.max(0, status.job.progressPercent || 0));
       elements['job-status'].textContent = statusLabels[status.job.status] || status.job.status;
       elements['job-status'].dataset.status = status.job.status;
       elements['progress-scope'].textContent = status.job.scope === 'pilot'
         ? `${status.job.pilotSize} 词质量试跑`
         : status.job.scope === 'all' ? '全部唯一词' : `${status.job.bank.toUpperCase()} 完整词库`;
-      elements['progress-heading'].textContent = `${formatNumber(status.job.resolved)} / ${formatNumber(status.job.targetTotal)}`;
-      elements['progress-percent'].textContent = `${percent.toFixed(2)}%`;
+      elements['progress-percent'].textContent = percent === 0 || percent >= 10
+        ? `${Math.round(percent)}%`
+        : `${percent.toFixed(percent < 1 ? 2 : 1)}%`;
+      elements['progress-count'].textContent = `（${formatNumber(status.job.resolved)} / ${formatNumber(status.job.targetTotal)}）`;
       elements['progress-value'].style.width = `${percent}%`;
       elements['progress-value'].parentElement.setAttribute('aria-valuenow', String(percent));
       elements.throughput.textContent = status.job.wordsPerMinute > 0
         ? `${status.job.wordsPerMinute.toFixed(2)} 词 / 分钟`
         : '等待速度样本';
       elements.eta.textContent = `ETA ${formatDuration(status.job.etaSeconds)}`;
-      elements['model-state'].textContent = `${status.settings.model || '未配置模型'} · ${status.settings.apiKeyConfigured ? '认证已就绪' : '缺少认证环境变量'}`;
+      const senseGap = status.senseGap || { senses: 0, fromDictionary: 0, generated: 0 };
+      elements['sense-gap'].textContent = senseGap.senses > 0
+        ? `${formatNumber(senseGap.senses)} 义项 · 牛津例句 ${formatNumber(senseGap.fromDictionary)} · 待补例句 ${formatNumber(senseGap.generated)}`
+        : '例句缺口待统计';
+      elements['model-state'].textContent = `${status.settings.model || '未配置模型'} · ${status.settings.apiKeyConfigured ? '认证已就绪' : '尚未配置 API Key'}`;
       elements['kpi-remaining'].textContent = formatNumber(status.job.remaining);
-      elements['kpi-remaining-note'].textContent = status.job.reviewPending
-        ? `${formatNumber(status.job.generationPending)} 待生成 · ${formatNumber(status.job.reviewPending)} 待审校`
-        : `${formatNumber(status.job.generationPending)} 待生成`;
+      elements['kpi-remaining-note'].textContent = `${formatNumber(status.job.generationPending)} 待生成`;
       elements['kpi-pass'].textContent = formatNumber(status.quality.pass);
       elements['kpi-warning'].textContent = formatNumber(status.quality.warning);
       elements['kpi-invalid'].textContent = formatNumber(status.quality.invalid);
@@ -604,19 +1089,35 @@
       elements['kpi-shards'].textContent = `${status.corpus.shardCount} 个分片`;
       elements['quality-pass'].textContent = status.quality.pass;
       elements['quality-warning'].textContent = status.quality.warning;
-      elements['quality-source-conflict'].textContent = status.quality.sourceConflict;
+      elements['quality-example-gap'].textContent = formatNumber(status.senseGap?.generated ?? 0);
       elements['quality-invalid'].textContent = status.quality.invalid;
       elements['scan-time'].textContent = status.corpus.scannedAt ? `扫描于 ${formatTime(status.corpus.scannedAt)}` : '尚未扫描';
-      elements.start.disabled = running || !status.settings.apiKeyConfigured;
-      elements.pause.disabled = !running;
+      const mapEvent = status.events?.[0];
+      if (mapEvent) {
+        const mapMeta = eventMeta[mapEvent.type] || ['·', mapEvent.type];
+        elements['word-map-activity'].textContent = `${mapMeta[0]} ${mapMeta[1]} · ${eventDescription(mapEvent)} · ${formatTime(mapEvent.timestamp)}`;
+      }
+      const toggle = elements['run-toggle'];
+      const missingKey = !status.settings.apiKeyConfigured;
+      toggle.textContent = running ? '❚❚ 暂停' : '▶ 开始 / 继续';
+      toggle.title = running
+        ? '暂停生成，已写入分片的内容会保留'
+        : missingKey
+          ? '请先在“模型设置”里填写并测试 API Key'
+          : '开始或从磁盘检查点继续';
+      toggle.classList.toggle('is-danger', running);
+      toggle.classList.toggle('is-primary', !running);
+      toggle.disabled = status.job.status === 'pausing';
       elements.rescan.disabled = running;
-      ['endpoint','model','scope','bank','pilot-size','concurrency','quality-mode'].forEach(id => elements[id].disabled = running);
+      elements['connection-test'].disabled = running;
+      ['endpoint','model','scope','bank','pilot-size','concurrency'].forEach(id => elements[id].disabled = running);
       elements.bank.disabled = running || elements.scope.value === 'all';
       elements['pilot-size'].disabled = running || elements.scope.value !== 'pilot';
+      elements['pilot-size'].closest('label').toggleAttribute('hidden', elements.scope.value !== 'pilot');
 
       elements['active-count'].textContent = `${status.activeWords.length} 个请求`;
       elements['active-list'].innerHTML = status.activeWords.length ? status.activeWords.map(item => `
-        <li class="active-item"><span class="event-icon">⋯</span><span><strong>${escapeHtml(item.word)}</strong><br><span>${item.phase === 'review' ? '语义审校' : '内容生成'} · 第 ${item.attempt}/${item.maxAttempts} 次 · ${escapeHtml(item.message || '模型推理中')}</span></span><span class="mono">${escapeHtml(item.wordId)}</span></li>
+        <li class="active-item"><span class="event-icon">⋯</span><span><strong>${escapeHtml(item.word)}</strong><br><span>内容生成 · 第 ${item.attempt}/${item.maxAttempts} 次 · ${escapeHtml(item.message || '模型推理中')}</span></span><span class="mono">${escapeHtml(item.wordId)}</span></li>
       `).join('') : '<li class="empty">当前没有正在推理的词</li>';
 
       elements['event-list'].innerHTML = status.events.length ? status.events.map(event => {
@@ -631,61 +1132,173 @@
 
       elements['pilot-count'].textContent = `${status.pilotWords.length} 词`;
       elements['pilot-list'].innerHTML = status.pilotWords.length ? status.pilotWords.map((item, index) => `
-        <li class="pilot-item ${item.completed && !item.reviewPending || item.sourceConflict || item.reviewRejected ? 'is-complete' : ''}"><span class="pilot-index">${String(index + 1).padStart(2, '0')}</span><span><strong>${escapeHtml(item.word)}</strong><br><span>${item.senseCount} 个中文义项</span></span><span>${item.sourceConflict ? '源冲突' : item.reviewRejected ? '审查未通过' : item.reviewPending ? '待审校' : item.completed ? '✓' : '待生成'}</span></li>
+        <li class="pilot-item ${item.completed ? 'is-complete' : ''}"><span class="pilot-index">${String(index + 1).padStart(2, '0')}</span><span><strong>${escapeHtml(item.word)}</strong><br><span>${item.senseCount} 个中文义项</span></span><span>${item.completed ? '✓' : '待处理'}</span></li>
       `).join('') : '<li class="empty">尚未建立任务</li>';
 
       elements['records-body'].innerHTML = status.recentRecords.length ? status.recentRecords.map(record => `
-        <tr><td><button class="word-link" data-word-id="${escapeHtml(record.wordId)}" type="button">${escapeHtml(record.word)}</button></td><td><span class="status-mark is-${record.status}">${record.status === 'pass' ? '✓ 通过' : record.status === 'warning' ? '△ 抽检' : record.status === 'source-conflict' ? '◇ 源冲突' : '! 无效'}</span></td><td>${record.senseCount}</td><td class="preview-cell">${escapeHtml(record.preview)}</td></tr>
+        <tr><td><button class="word-link" data-word-id="${escapeHtml(record.wordId)}" type="button">${escapeHtml(record.word)}</button></td><td><span class="status-mark is-${record.status}">${record.status === 'pass' ? '✓ 通过' : record.status === 'warning' ? '△ 警告' : '! 无效'}</span></td><td>${record.senseCount}</td><td class="preview-cell">${escapeHtml(record.preview)}</td></tr>
       `).join('') : '<tr><td colspan="4" class="empty">尚无已生成记录</td></tr>';
-      document.querySelectorAll('.word-link').forEach(button => button.addEventListener('click', () => openRecord(button.dataset.wordId)));
-      if (status.job.lastError) setError(status.job.lastError);
-      else setError('');
+      document.querySelectorAll('.word-link').forEach(button => button.addEventListener('click', () => openWordDetail(button.dataset.wordId)));
+      setError(status.storageError || status.job.lastError || '');
     }
 
-    function inlineMarkdown(value) {
-      return escapeHtml(value).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    function senseCardHtml({
+      sense,
+      index,
+      learning,
+      dictionarySense,
+      isTarget,
+      isRunning,
+      wordId,
+    }) {
+      const dictionaryExample = dictionarySense?.examples?.[0];
+      const sentence = learning?.example || dictionaryExample?.english || '';
+      const translation = learning?.translation || dictionaryExample?.chinese || '';
+      const fromDictionary = learning?.exampleSource === 'dictionary'
+        || (!learning?.example && Boolean(dictionaryExample));
+      const stateLabel = isTarget
+        ? isRunning ? '生成中' : '待补充'
+        : learning ? '已生成' : '未生成';
+      const actionLabel = learning ? '↻ 重生成此义项' : '▶ 生成此义项';
+      return `
+        <li id="sense-card-${index + 1}" class="sense-card ${isTarget ? 'is-target' : ''}"
+          data-sense-id="${escapeHtml(sense.id)}" tabindex="-1">
+          <div class="sense-card-head">
+            <span class="sense-card-index">${index + 1}</span>
+            ${sense.label ? `<span class="sense-card-label">${escapeHtml(sense.label)}</span>` : ''}
+            <span class="sense-card-gloss">${escapeHtml(sense.text)}</span>
+            <span class="sense-card-state">${stateLabel}</span>
+          </div>
+          ${learning?.mnemonic ? `<p class="sense-note"><b>助记</b> ${escapeHtml(learning.mnemonic)}</p>` : '<p class="sense-card-missing">助记技巧待生成。</p>'}
+          ${learning?.usageTip ? `<p class="sense-note"><b>用法</b> ${escapeHtml(learning.usageTip)}</p>` : '<p class="sense-card-missing">用法指南待生成。</p>'}
+          ${sentence ? `
+            <div class="sense-example">
+              <p>${escapeHtml(sentence)}</p>
+              <small>${escapeHtml(translation)}</small>
+              <span class="sense-example-source">${fromDictionary ? '牛津词典例句' : 'AI 补充例句'}</span>
+            </div>` : '<p class="sense-card-missing">该义项暂无例句。</p>'}
+          <div class="sense-card-actions">
+            <button class="command-button sense-regenerate" type="button"
+              data-word-id="${escapeHtml(wordId)}" data-sense-id="${escapeHtml(sense.id)}"
+              ${isRunning ? 'disabled' : ''}>${isTarget && isRunning ? '生成中…' : actionLabel}</button>
+          </div>
+        </li>`;
     }
-    function renderMarkdown(markdown) {
-      const blocks = [];
-      let list = [];
-      const flushList = () => { if (list.length) { blocks.push(`<ul>${list.join('')}</ul>`); list = []; } };
-      markdown.split('\n').forEach(line => {
-        if (line.startsWith('### ')) { flushList(); blocks.push(`<h3>${inlineMarkdown(line.slice(4))}</h3>`); }
-        else if (line.startsWith('- ')) list.push(`<li>${inlineMarkdown(line.slice(2))}</li>`);
-        else if (line.trim()) { flushList(); blocks.push(`<p>${inlineMarkdown(line)}</p>`); }
-      });
-      flushList();
-      return blocks.join('');
-    }
-    async function openRecord(wordId) {
+
+    async function openWordDetail(wordId, preserveScroll = false) {
       try {
-        const response = await fetch(`/api/record?id=${encodeURIComponent(wordId)}`);
-        const record = await response.json();
-        if (!response.ok) throw new Error(record.error || '读取讲解失败。');
-        elements['record-title'].textContent = `${record.word.word} · ${record.status === 'pass' ? '质量通过' : '需要抽检'}`;
-        elements['coach-render'].innerHTML = renderMarkdown(record.explanation.markdown);
-        elements['issue-list'].innerHTML = record.issues.map(issue => `<li>${escapeHtml(issue.message)}</li>`).join('');
-        elements['example-list'].innerHTML = record.explanation.senseExamples.map((example, index) => `
-          <li><p><strong>${index + 1}.</strong> ${escapeHtml(example.sentence)}</p><small>${escapeHtml(example.translation)}</small></li>
-        `).join('');
-        elements['record-dialog'].showModal();
+        const body = elements['record-dialog'].querySelector('.record-body');
+        const previousScroll = preserveScroll ? body.scrollTop : 0;
+        const response = await fetch(`/api/grid/word?id=${encodeURIComponent(wordId)}`, { cache: 'no-store' });
+        const detail = await response.json();
+        if (!response.ok) throw new Error(detail.error || '读取单词详情失败。');
+        currentWordDetail = detail;
+        const { cell, word, record, senseGap, senses, dictionarySenses, events } = detail;
+        const isRunning = document.body.dataset.running === 'true';
+        const publishedContent = record?.explanation?.senseContent || {};
+        const content = { ...publishedContent, ...(detail.partialSenseContent || {}) };
+        const dictionaryById = new Map((dictionarySenses || []).map((sense) => [sense.id, sense]));
+        const targetSenseIds = new Set(detail.targetSenseIds || []);
+        const phonetic = String(word.phonetic ?? '').replace(/^\/+|\/+$/g, '');
+        elements['record-title'].textContent = word.word;
+        elements['record-meta'].textContent = `${phonetic ? `/${phonetic}/ · ` : ''}${senses.length} 个义项`;
+        elements['record-status'].textContent = wordGridStateLabels[cell.state] || cell.state;
+        elements['record-status'].dataset.state = cell.state;
+        elements['detail-meta'].innerHTML = [
+          ['关卡位置', `第 ${detail.levelNumber} 关 · ${detail.positionInLevel}/25`],
+          ['义项数量', String(cell.senseCount)],
+          ['牛津例句', senseGap ? `${senseGap.fromDictionary} / ${senseGap.senses}` : '未知'],
+          ['待补例句', senseGap ? String(senseGap.generated) : '未知'],
+        ].map(([label, value]) => `<div><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join('');
+        const relevantEvent = events.find((event) => event.type === 'word-failed') ?? events[0];
+        const summary = detailSummary(cell, relevantEvent, isRunning);
+        elements['detail-summary'].hidden = false;
+        elements['detail-summary-title'].textContent = summary.title;
+        elements['detail-message'].textContent = summary.message;
+        const failureSenseIds = new Set(cell.state === 'failed' ? detail.targetSenseIds || [] : []);
+        const failureLinks = senses.flatMap((sense, index) => failureSenseIds.has(sense.id)
+          ? [`<a class="sense-jump" href="#sense-card-${index + 1}" data-sense-id="${escapeHtml(sense.id)}">第 ${index + 1} 项 · ${escapeHtml([sense.label, sense.text].filter(Boolean).join(' '))}</a>`]
+          : []);
+        elements['detail-summary-links'].hidden = failureLinks.length === 0;
+        elements['detail-summary-links'].innerHTML = failureLinks.join('');
+        elements['detail-summary-actions'].hidden = cell.state !== 'failed';
+        elements['detail-retry-all'].disabled = isRunning;
+        elements['detail-retry-all'].textContent = isRunning ? '生成中…' : '↻ 全部重试';
+        elements['issue-list'].innerHTML = (record?.issues || [])
+          .map(issue => `<li>${escapeHtml(issue.message)}</li>`).join('');
+        elements['sense-card-list'].innerHTML = senses.length
+          ? senses.map((sense, index) => senseCardHtml({
+            sense,
+            index,
+            learning: content[sense.id],
+            dictionarySense: dictionaryById.get(sense.id),
+            isTarget: targetSenseIds.has(sense.id),
+            isRunning,
+            wordId,
+          })).join('')
+          : '<li class="sense-card-missing">该词没有可展示的义项。</li>';
+        elements['detail-events'].innerHTML = events.length
+          ? events.map(event => `<li><strong>${escapeHtml((eventMeta[event.type] || ['·', event.type])[1])}</strong> · ${escapeHtml(eventDescription(event))} · ${formatTime(event.timestamp)}</li>`).join('')
+          : '<li>暂无运行事件</li>';
+        if (!elements['record-dialog'].open) elements['record-dialog'].showModal();
+        body.scrollTop = previousScroll;
       } catch (error) { setError(error.message || String(error)); }
     }
 
     async function post(path, body = {}) {
-      const response = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-      const payload = await response.json();
+      let response;
+      try {
+        response = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      } catch {
+        throw new Error('无法连接控制台服务，请确认 npm run data:coach:dashboard 仍在运行。');
+      }
+      const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || `请求失败 (${response.status})`);
       render(payload);
     }
 
-    elements.scope.addEventListener('change', () => {
+    let targetSelectionChain = Promise.resolve();
+    function applyTargetSelection() {
       elements.bank.disabled = elements.scope.value === 'all';
       elements['pilot-size'].disabled = elements.scope.value !== 'pilot';
+      elements['pilot-size'].closest('label').toggleAttribute('hidden', elements.scope.value !== 'pilot');
+      // Serialize so rapid switches cannot interleave and leave stale counters.
+      targetSelectionChain = targetSelectionChain.catch(() => {}).then(async () => {
+        try {
+          setError('');
+          await post('/api/target', {
+            scope: elements.scope.value,
+            bank: elements.bank.value,
+            pilotSize: Number(elements['pilot-size'].value),
+            concurrency: Number(elements.concurrency.value),
+          });
+          await fetchWordGrid();
+        } catch (error) { setError(error.message || String(error)); }
+      });
+      return targetSelectionChain;
+    }
+
+    ['scope', 'bank', 'pilot-size', 'concurrency'].forEach(id => (
+      elements[id].addEventListener('change', applyTargetSelection)
+    ));
+    elements['theme-toggle'].addEventListener('click', () => {
+      const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      localStorage.setItem('forgeTheme', next);
+      requestWordGridDraw();
     });
-    elements.start.addEventListener('click', async () => {
+    elements['run-toggle'].addEventListener('click', async () => {
+      const running = document.body.dataset.running === 'true';
+      if (!running && !currentStatus?.settings?.apiKeyConfigured) {
+        nudgeConnectionSettings('开始之前请先填写 API Key 并点击“测试并保存”。');
+        return;
+      }
       try {
         setError('');
+        if (running) {
+          await post('/api/pause');
+          return;
+        }
         await post('/api/start', {
           endpoint: elements.endpoint.value,
           model: elements.model.value,
@@ -693,30 +1306,176 @@
           bank: elements.bank.value,
           pilotSize: Number(elements['pilot-size'].value),
           concurrency: Number(elements.concurrency.value),
-          qualityMode: elements['quality-mode'].value,
           authMode: 'bearer',
           outputLanguage: 'Simplified Chinese',
         });
       } catch (error) { setError(error.message || String(error)); }
     });
-    elements.pause.addEventListener('click', async () => {
-      try { await post('/api/pause'); } catch (error) { setError(error.message || String(error)); }
+    elements['connection-test'].addEventListener('click', async () => {
+      const button = elements['connection-test'];
+      const result = elements['connection-result'];
+      button.disabled = true;
+      button.textContent = '测试中…';
+      result.className = 'connection-result';
+      result.textContent = '正在连接模型…';
+      try {
+        await post('/api/connection/test', {
+          endpoint: elements.endpoint.value,
+          model: elements.model.value,
+          apiKey: elements['api-key'].value,
+        });
+        elements['api-key'].value = '';
+        elements['api-key'].placeholder = '已配置（如需更换请重新输入）';
+        result.className = 'connection-result is-ok';
+        result.textContent = '✓ 连接成功，设置已保存。';
+      } catch (error) {
+        result.className = 'connection-result is-error';
+        result.textContent = `✗ ${error.message || String(error)}`;
+      } finally {
+        button.textContent = '测试并保存';
+        button.disabled = document.body.dataset.running === 'true';
+      }
     });
     elements.rescan.addEventListener('click', async () => {
-      try { await post('/api/rescan'); } catch (error) { setError(error.message || String(error)); }
+      try { await post('/api/rescan'); await fetchWordGrid(); } catch (error) { setError(error.message || String(error)); }
     });
-    elements['record-close'].addEventListener('click', () => elements['record-dialog'].close());
+    elements['record-close'].addEventListener('click', () => {
+      elements['record-dialog'].close();
+      currentWordDetail = null;
+    });
     elements['record-dialog'].addEventListener('click', event => {
-      if (event.target === elements['record-dialog']) elements['record-dialog'].close();
+      if (event.target === elements['record-dialog']) {
+        elements['record-dialog'].close();
+        currentWordDetail = null;
+      }
+    });
+    elements['record-dialog'].addEventListener('close', () => {
+      currentWordDetail = null;
+    });
+    elements['detail-summary-links'].addEventListener('click', event => {
+      const link = event.target.closest('.sense-jump');
+      if (!link) return;
+      event.preventDefault();
+      const card = elements['sense-card-list']
+        .querySelector(`[data-sense-id="${CSS.escape(link.dataset.senseId)}"]`);
+      if (!card) return;
+      card.classList.remove('is-jump-target');
+      void card.offsetWidth;
+      card.classList.add('is-jump-target');
+      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      card.focus({ preventScroll: true });
+      const keepHighlight = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (!keepHighlight) setTimeout(() => card.classList.remove('is-jump-target'), 1400);
+    });
+    elements['detail-retry-all'].addEventListener('click', async () => {
+      if (!currentWordDetail) return;
+      const button = elements['detail-retry-all'];
+      button.disabled = true;
+      button.textContent = '已提交…';
+      try {
+        setError('');
+        await post('/api/retry', { wordId: currentWordDetail.cell.wordId });
+        await fetchWordGrid();
+        button.textContent = '生成中…';
+      } catch (error) {
+        button.disabled = false;
+        button.textContent = '↻ 全部重试';
+        setError(error.message || String(error));
+      }
+    });
+    elements['sense-card-list'].addEventListener('click', async event => {
+      const button = event.target.closest('.sense-regenerate');
+      if (!button || !currentWordDetail) return;
+      const { wordId, senseId } = button.dataset;
+      button.disabled = true;
+      button.textContent = '已提交…';
+      try {
+        setError('');
+        await post('/api/retry', { wordId, senseId });
+        await fetchWordGrid();
+        button.closest('.sense-card')?.classList.add('is-target');
+        button.textContent = '生成中…';
+      } catch (error) {
+        button.disabled = false;
+        button.textContent = '↻ 重生成此义项';
+        setError(error.message || String(error));
+      }
+    });
+    document.querySelectorAll('.word-filter').forEach(button => button.addEventListener('click', () => {
+      wordGridFilter = button.dataset.state;
+      document.querySelectorAll('.word-filter').forEach(candidate => candidate.classList.toggle('is-active', candidate === button));
+      requestWordGridDraw();
+    }));
+    const zoomSteps = [5, 7, 8, 10, 12, 16];
+    function changeWordGridZoom(direction) {
+      const current = Math.max(0, zoomSteps.indexOf(wordGridCellSize));
+      wordGridCellSize = zoomSteps[Math.min(zoomSteps.length - 1, Math.max(0, current + direction))];
+      elements['word-map-zoom-label'].textContent = `${wordGridCellSize} px`;
+      requestWordGridDraw();
+    }
+    elements['word-map-zoom-out'].addEventListener('click', () => changeWordGridZoom(-1));
+    elements['word-map-zoom-in'].addEventListener('click', () => changeWordGridZoom(1));
+    elements['word-grid-canvas'].addEventListener('pointermove', event => {
+      const cell = gridCellFromPointer(event);
+      if (!cell) {
+        elements['word-map-tooltip'].classList.remove('is-visible');
+        return;
+      }
+      elements['word-map-tooltip'].innerHTML = `<strong>${escapeHtml(cell.word)}</strong><br>${escapeHtml(wordGridStateLabels[cell.state])} · 第 ${cell.index + 1}/${wordGrid.cells.length}`;
+      elements['word-map-tooltip'].style.left = `${Math.min(innerWidth - 250, event.clientX + 12)}px`;
+      elements['word-map-tooltip'].style.top = `${Math.min(innerHeight - 70, event.clientY + 12)}px`;
+      elements['word-map-tooltip'].classList.add('is-visible');
+    });
+    elements['word-grid-canvas'].addEventListener('pointerleave', () => elements['word-map-tooltip'].classList.remove('is-visible'));
+    elements['word-grid-canvas'].addEventListener('click', event => {
+      const cell = gridCellFromPointer(event);
+      if (!cell) return;
+      selectWordGridCell(cell);
+      openWordCell(cell);
+    });
+    elements['word-grid-canvas'].addEventListener('keydown', event => {
+      if (!wordGridLayout || wordGrid.cells.length === 0) return;
+      const moves = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -wordGridLayout.columns, ArrowDown: wordGridLayout.columns };
+      if (event.key === 'Enter' && wordGridSelectedIndex >= 0) {
+        event.preventDefault();
+        openWordCell(wordGrid.cells[wordGridSelectedIndex]);
+        return;
+      }
+      if (!(event.key in moves)) return;
+      event.preventDefault();
+      const nextIndex = Math.min(wordGrid.cells.length - 1, Math.max(0, (wordGridSelectedIndex < 0 ? 0 : wordGridSelectedIndex) + moves[event.key]));
+      selectWordGridCell(wordGrid.cells[nextIndex]);
+    });
+    const scheduleWordGridResize = () => {
+      clearTimeout(wordGridResizeTimer);
+      wordGridResizeTimer = setTimeout(() => drawWordGrid(), 120);
+    };
+    window.addEventListener('resize', scheduleWordGridResize);
+    new ResizeObserver(scheduleWordGridResize).observe(elements['word-map-scroll']);
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) drawWordGrid();
     });
 
     function connectEvents() {
       const source = new EventSource('/api/events');
-      source.onopen = () => elements['connection-dot'].classList.add('is-connected');
-      source.onmessage = event => render(JSON.parse(event.data));
-      source.onerror = () => elements['connection-dot'].classList.remove('is-connected');
+      source.onopen = () => {
+        elements['connection-dot'].classList.add('is-connected');
+        void fetchWordGrid().catch(error => setError(error.message));
+      };
+      source.onmessage = event => {
+        const status = JSON.parse(event.data);
+        render(status);
+        if (status.wordGridDelta) applyWordGridDelta(status.wordGridDelta);
+      };
+      source.onerror = () => {
+        elements['connection-dot'].classList.remove('is-connected');
+        setError('与控制台服务的连接已断开，请确认 npm run data:coach:dashboard 仍在运行。');
+      };
     }
-    fetch('/api/status').then(response => response.json()).then(render).catch(error => setError(error.message));
+    Promise.all([
+      fetch('/api/status').then(response => response.json()).then(render),
+      fetchWordGrid(),
+    ]).catch(() => setError('无法连接控制台服务，请确认 npm run data:coach:dashboard 仍在运行。'));
     connectEvents();
     setInterval(() => fetch('/api/status').then(response => response.json()).then(render).catch(() => {}), 10000);
   </script>

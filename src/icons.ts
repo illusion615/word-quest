@@ -5,6 +5,7 @@ export { default as Brain } from 'lucide-react/dist/esm/icons/brain.mjs';
 export { default as CalendarCheck } from 'lucide-react/dist/esm/icons/calendar-check.mjs';
 export { default as CheckCircle2 } from 'lucide-react/dist/esm/icons/circle-check-big.mjs';
 export { default as Clock3 } from 'lucide-react/dist/esm/icons/clock-3.mjs';
+export { default as CircleHelp } from 'lucide-react/dist/esm/icons/circle-help.mjs';
 export { default as Crown } from 'lucide-react/dist/esm/icons/crown.mjs';
 export { default as ExternalLink } from 'lucide-react/dist/esm/icons/external-link.mjs';
 export { default as EyeOff } from 'lucide-react/dist/esm/icons/eye-off.mjs';

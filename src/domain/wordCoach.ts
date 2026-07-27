@@ -1,13 +1,12 @@
-import type { StaticWordCoachRecord, WordEntry, WordExplanation } from './models';
-import { parseDefinitionSenses } from './wordText';
+import type { WordEntry, WordExplanation } from './models';
+import { LEXICON_SHARD_COUNT, lexiconShardId } from './lexiconShard';
+import { parseWordSenses } from './wordText';
 
 export const WORD_COACH_SCHEMA_VERSION = 1;
-export const WORD_COACH_PROMPT_VERSION = 18;
-export const WORD_COACH_REVIEW_VERSION = 1;
-export const WORD_COACH_SHARD_COUNT = 256;
+export const WORD_COACH_PROMPT_VERSION = 22;
+export const WORD_COACH_SHARD_COUNT = LEXICON_SHARD_COUNT;
 
 export type WordCoachQualitySeverity = 'error' | 'warning';
-export type WordCoachQualityMode = 'unreviewed' | 'balanced' | 'strict';
 
 export interface WordCoachQualityIssue {
   code: string;
@@ -85,22 +84,6 @@ export function parseWordCoachSections(
   };
 }
 
-export function wordCoachRequiresSemanticReview(
-  word: WordEntry,
-  qualityMode: WordCoachQualityMode,
-): boolean {
-  if (qualityMode === 'strict') return true;
-  if (qualityMode === 'unreviewed') return false;
-  const hasTechnicalTag = /\[[^\]]+\]/.test(word.definitionZh);
-  const looksLikeShortTechnicalTerm = /^[A-Za-z]{1,4}$/.test(word.word)
-    && hasTechnicalTag;
-  const hasSuspiciousSourceMarker = /(?:交直流.{0,4}两用|简写|简称)/u
-    .test(word.definitionZh);
-  return parseDefinitionSenses(word.definitionZh).length >= 5
-    || looksLikeShortTechnicalTerm
-    || hasSuspiciousSourceMarker;
-}
-
 function fnv1a(value: string): number {
   let hash = 0x811c9dc5;
   for (const character of value) {
@@ -111,9 +94,7 @@ function fnv1a(value: string): number {
 }
 
 export function wordCoachShardId(wordId: string): string {
-  return (fnv1a(wordId) & (WORD_COACH_SHARD_COUNT - 1))
-    .toString(16)
-    .padStart(2, '0');
+  return lexiconShardId(wordId);
 }
 
 export function wordCoachSourceHash(word: WordEntry): string {
@@ -124,26 +105,9 @@ export function wordCoachSourceHash(word: WordEntry): string {
     word.partOfSpeech,
     word.definition,
     word.definitionZh,
+    word.senseIds,
+    word.lexicalSourceHash,
   ])).toString(16).padStart(8, '0');
-}
-
-export function wordCoachContentHash(explanation: WordExplanation): string {
-  return fnv1a(JSON.stringify([
-    explanation.markdown,
-    explanation.senseExamples,
-  ])).toString(16).padStart(8, '0');
-}
-
-export function wordCoachRecordHasSourceConflict(
-  word: WordEntry,
-  record: StaticWordCoachRecord | null | undefined,
-): boolean {
-  return Boolean(record
-    && record.sourceHash === wordCoachSourceHash(word)
-    && record.qualityReview?.verdict === 'fail'
-    && record.qualityReview.issues.some((issue) => (
-      issue.severity === 'error' && issue.code === 'source_conflict'
-    )));
 }
 
 export function assessWordCoachQuality(
@@ -152,37 +116,51 @@ export function assessWordCoachQuality(
   outputLanguage = 'Simplified Chinese',
 ): WordCoachQualityIssue[] {
   const issues: WordCoachQualityIssue[] = [];
-  const chineseSenseCount = parseDefinitionSenses(word.definitionZh).length;
-  const headings = explanation.markdown.match(/^###\s+.+$/gm) ?? [];
-  const bullets = explanation.markdown.match(/^-\s+/gm) ?? [];
+  const chineseSenses = parseWordSenses(word);
+  const chineseSenseCount = chineseSenses.length;
 
-  if (headings.length !== 3) {
-    issues.push({
-      code: 'markdown-headings',
-      severity: 'error',
-      message: `讲解需要 3 个段落标题，当前为 ${headings.length} 个。`,
-    });
-  }
-  if (bullets.length !== chineseSenseCount + 3) {
-    issues.push({
-      code: 'markdown-bullets',
-      severity: 'error',
-      message: `讲解需要 ${chineseSenseCount + 3} 个列表项，当前为 ${bullets.length} 个。`,
-    });
-  }
-  if (explanation.markdown.length < 120) {
-    issues.push({
-      code: 'coach-too-short',
-      severity: 'warning',
-      message: '讲解过短，可能缺少有效辨析。',
-    });
-  }
-  if (explanation.markdown.length > 5000) {
-    issues.push({
-      code: 'coach-too-long',
-      severity: 'warning',
-      message: '讲解超过 5,000 字符，需要人工检查是否冗长。',
-    });
+  if (explanation.senseContent) {
+    const contentIds = Object.keys(explanation.senseContent);
+    if (contentIds.length !== chineseSenseCount
+      || chineseSenses.some((sense) => !explanation.senseContent?.[sense.id])) {
+      issues.push({
+        code: 'sense-content-coverage',
+        severity: 'error',
+        message: '逐义学习内容与当前释义 ID 不一致。',
+      });
+    }
+  } else {
+    const headings = explanation.markdown.match(/^###\s+.+$/gm) ?? [];
+    const bullets = explanation.markdown.match(/^-\s+/gm) ?? [];
+
+    if (headings.length !== 3) {
+      issues.push({
+        code: 'markdown-headings',
+        severity: 'error',
+        message: `讲解需要 3 个段落标题，当前为 ${headings.length} 个。`,
+      });
+    }
+    if (bullets.length !== chineseSenseCount + 3) {
+      issues.push({
+        code: 'markdown-bullets',
+        severity: 'error',
+        message: `讲解需要 ${chineseSenseCount + 3} 个列表项，当前为 ${bullets.length} 个。`,
+      });
+    }
+    if (explanation.markdown.length < 120) {
+      issues.push({
+        code: 'coach-too-short',
+        severity: 'warning',
+        message: '讲解过短，可能缺少有效辨析。',
+      });
+    }
+    if (explanation.markdown.length > 5000) {
+      issues.push({
+        code: 'coach-too-long',
+        severity: 'warning',
+        message: '讲解超过 5,000 字符，需要人工检查是否冗长。',
+      });
+    }
   }
 
   const sentences = explanation.senseExamples.map((example) => example.sentence.toLowerCase());

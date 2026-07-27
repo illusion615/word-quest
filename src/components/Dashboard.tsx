@@ -5,8 +5,6 @@ import {
   Flame,
   CheckCircle2,
   Crown,
-  ExternalLink,
-  Info,
   LoaderCircle,
   LockKeyhole,
   RefreshCw,
@@ -79,9 +77,6 @@ export function Dashboard({
   );
   const [selectedChapterIndex, setSelectedChapterIndex] = useState(journey.activeChapterIndex);
   const selectedChapter = journey.chapters[selectedChapterIndex] ?? journey.chapters[0];
-  const statusLabel = currentBank.status === 'curated'
-    ? '备考词表 · 官方无固定全集'
-    : '考试大纲标签汇编 · 非官方发布';
 
   useEffect(() => {
     setSelectedChapterIndex(journey.activeChapterIndex);
@@ -263,18 +258,6 @@ export function Dashboard({
         </ol>
 
         {bankError && <p className="bank-error" role="alert">{bankError}</p>}
-        <div className="source-note">
-          <Info aria-hidden="true" />
-          <div>
-            <strong>{statusLabel}</strong>
-            <p>{currentBank.basis} · {currentBank.sourceVersion}</p>
-          </div>
-          {currentBank.sourceUrl && (
-            <a href={currentBank.sourceUrl} target="_blank" rel="noreferrer">
-              {currentBank.sourceName} <ExternalLink aria-hidden="true" />
-            </a>
-          )}
-        </div>
         <p className="journey-ai-note">
           {aiConfigured
             ? '每轮先复习到期词，再引入最多 8 个新词；未到期词不会重复出现。'

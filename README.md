@@ -9,21 +9,23 @@
 
 ## 词库范围
 
-考试词库从 MIT 许可的 ECDICT 固定版本生成，应用按用户选择加载，不会全部打进主包。
+考试成员与词典事实分开管理：教育部和全国大学英语四、六级考试委员会的官方文件决定高中/CET 成员，macOS 自带的《牛津英汉汉英词典》决定词性、中文义项、音标、标签、搭配和例句。`public/data/lexicon/words.json` 是 11,846 个词条、53,488 个独立义项及稳定 `senseId` 的权威主数据；`public/data/exam-banks/bank-index.json` 只保存各词库的有序词条 ID。
 
 | 词库 | 词数 | 收录边界 |
 | --- | ---: | --- |
-| 高考 | 3,677 | ECDICT `gk` 高考大纲标签全部词条 |
-| CET-4 | 3,849 | ECDICT `cet4` 标签全部词条 |
-| CET-6 | 5,805 | CET-4 基础与 `cet6` 增量合集 |
-| IELTS | 5,040 | ECDICT `ielts` 备考标签全部词条 |
-| TOEFL | 6,974 | ECDICT `toefl` 备考标签全部词条 |
+| 高中课标 | 3,000 | 教育部《普通高中英语课程标准（2017年版2020年修订）》附录 2 |
+| CET-4 | 4,039 | 2016 年官方词表未标 `★` 的 4,114 个词族行，按可学习词条去重 |
+| CET-6 | 5,295 | 官方词表全部 5,377 个物理词族行；3 个本版 Oxford 缺项暂不进入练习 |
+| IELTS | 5,015 | 沿用固定 curated 成员范围；25 个本版 Oxford 缺项暂不进入练习 |
+| TOEFL | 6,805 | 沿用固定 curated 成员范围；169 个本版 Oxford 缺项暂不进入练习 |
 
-高考与 CET 标签是大纲索引汇编，并非考试机构发布的官方电子词表。IELTS 和 TOEFL 官方没有固定词汇全集，因此应用明确标为备考词表。数据源 commit、生成日期、缺失字段统计和许可证保存在 `public/data/exam-banks/manifest.json`。
+官方 CET 文件声明 5,418 个“词目”，版面实际提取为 5,377 个词族行、8,013 个归一化词形；两种计数和每一行的 `★`、页码、派生词关系都保存在 `scripts/data/official-membership/cet.json`，不强行混成一个数字。高中附录的说明写明 `1500 / 500 / 1000`，实际印刷标记为 `1500 / 499 / 1001`；构建器保留印刷事实并记录这处源文档异常。
 
-构建时会用 Princeton WordNet 3.0 的词性归属校验中文释义，删除 ECDICT 偶尔误挂在名词/形容词条目上的伪造动词义（例如 `safety` 上错误的 `vt. 保护, 防护`）。校验表 `scripts/data/wordnet-pos.json` 由 `npm run data:wordnet-pos` 生成，只保留“该词是否为动词”的最小判定；真正的多词性动词（如 `time`、`make`）与情态动词（如 `may`）不受影响。
+IELTS 和 TOEFL 官方没有固定词汇全集，因此应用继续明确标为备考词表。固定 ECDICT commit 只用于冻结这两个 curated 成员范围，以及在官方词表替换后尽量保持旧旅程顺序；ECDICT 的音标、词性和释义不再进入 canonical 词典。
 
-学习进度按规范化单词 ID 全局记录，不按词库重复保存。首次练习后立即提升相关词库的“学习覆盖”；只有 FSRS 卡片进入 Review 状态且记忆稳定性达到 21 天，才计入“稳定掌握”。历史正确率仅用于反馈，不决定调度或掌握。跨库成员关系由同一固定数据源生成，并保存在 `public/data/exam-banks/coverage-index.json`。
+每个 Oxford 义项独立保存，包含来源 record/sense ID；同一编号下的多个翻译组也会拆成不同 `senseId`。LLM 不参与词典事实判断，也不再审查释义：它只在这些稳定 ID 上补齐助记技巧、用法指南，以及 Oxford 没有例句时的学习例句。凡是 Oxford 已有例句的义项，一律原样复用（记为 `exampleSource: "dictionary"`），生成内容不得改写。每个义项独立验收并保存检查点，失败或人工重生成时只请求该义项；Oxford 来源变化会更新 `lexicalSourceHash`，使对应旧 coach 自动失效。
+
+学习进度按稳定单词 ID 全局记录，不按词库重复保存。旧规范化 ID 在同一词形上继续沿用；`May/may`、`China/china` 等大小写异义词获得独立 ID，避免进度互相污染。新旅程顺序受校验哈希保护，后续数据重建不能静默改变关卡与 Boss 题池。
 
 ## 本地运行
 
@@ -39,6 +41,34 @@ npm run dev
 ```bash
 npm run check
 ```
+
+### 用户功能发布
+
+每次准备提交用户可见的新功能时，必须同步完成以下三项：
+
+1. 更新 `package.json` / `package-lock.json` 版本；
+2. 在 `src/data/release-notes.json` 中写入面向用户的“更新内容”，说明用户能做什么、体验有什么改善，不描述内部实现；
+3. 在 `CHANGELOG.md` 中记录对应版本。
+
+`npm run release:verify` 会核对当前版本是否同时存在于用户更新数据和变更日志中；它也是 `npm run check` 的必过步骤。应用用当前版本和浏览器已读版本比较，只有版本变化时才自动弹出更新内容；用户仍可从帮助中心随时回看。
+
+### 词库与静态讲解
+
+词典源构建需要 macOS 已安装《牛津英汉汉英词典》。官方成员表和 Oxford 结构化词典更新后，依次执行：
+
+```bash
+npm run data:oxford:build
+npm run data:build
+npm run data:verify
+```
+
+静态词汇讲解通过 Lexicon Forge 生成：
+
+```bash
+npm run data:coach:dashboard
+```
+
+打开 `http://127.0.0.1:4175/`，在「模型设置」中测试并保存连接后即可按词库生成。Forge 只把已完整通过的词条写入 `public/data/word-coach/`；逐义检查点、失败记录和本地 API Key 保存在 gitignored 的 `.word-coach/` 中。
 
 ## GitHub Pages
 

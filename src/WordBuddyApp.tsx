@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Moon, Sparkles, Sun, Trophy, Volume2 } from './icons';
+import { CircleHelp, Moon, Sparkles, Sun, Trophy, Volume2 } from './icons';
 import logo from './assets/logo2.webp';
 import { AchievementDialog } from './components/AchievementDialog';
 import { AchievementToast } from './components/AchievementToast';
@@ -8,6 +8,7 @@ import { BattleRecord } from './components/BattleRecord';
 import { Dashboard } from './components/Dashboard';
 import { PracticeSession } from './components/PracticeSession';
 import { ChallengePrep } from './components/ChallengePrep';
+import { HelpCenterDialog } from './components/HelpCenterDialog';
 import { SpeechSettingsDialog } from './components/SpeechSettingsDialog';
 import { WORD_BANKS } from './data/bankRepository';
 import { loadStaticWordExplanation } from './data/wordCoachRepository';
@@ -53,6 +54,7 @@ import { useBankCoverage } from './hooks/useBankCoverage';
 import { useCombat } from './hooks/useCombat';
 import { useGameProgress } from './hooks/useGameProgress';
 import { useGameSession } from './hooks/useGameSession';
+import { useHelpCenter } from './hooks/useHelpCenter';
 import { useLearningProgress } from './hooks/useLearningProgress';
 import { useSpeech } from './hooks/useSpeech';
 import { useWordBank } from './hooks/useWordBank';
@@ -149,6 +151,7 @@ export default function WordBuddyApp() {
   const speech = useSpeech();
   const combat = useCombat();
   const gameProgress = useGameProgress();
+  const helpCenter = useHelpCenter(progressHydrated, stats.learned === 0);
   const achievementSnapshot = {
     gameProgress: gameProgress.progress,
     learningStats: stats,
@@ -436,6 +439,7 @@ export default function WordBuddyApp() {
         status: 'success',
         text: explanation.markdown,
         senseExamples: explanation.senseExamples,
+        senseContent: explanation.senseContent,
         source: 'static',
       } : {
         wordId: word.id,
@@ -470,6 +474,7 @@ export default function WordBuddyApp() {
         status: 'success',
         text: explanation.markdown,
         senseExamples: explanation.senseExamples,
+        senseContent: explanation.senseContent,
         source: 'ai',
       });
     } catch (error) {
@@ -563,6 +568,15 @@ export default function WordBuddyApp() {
             <span className="today-count">今日 {stats.today} 题</span>
             <button
               type="button"
+              className="icon-button"
+              onClick={() => helpCenter.openHelp('guide')}
+              aria-label="打开帮助中心"
+              title="帮助中心"
+            >
+              <CircleHelp aria-hidden="true" />
+            </button>
+            <button
+              type="button"
               className="icon-button achievement-button"
               onClick={() => setAchievementsOpen(true)}
               aria-label={`卷王成就：已达成 ${achievements.unlockedCount} 项`}
@@ -615,6 +629,7 @@ export default function WordBuddyApp() {
           onChoose={handleChooseBoost}
           onContinue={handleContinueWithBoosts}
           onExit={handleStopSession}
+          onOpenHelp={() => helpCenter.openHelp('guide')}
         />
       ) : session ? (
         <PracticeSession
@@ -716,6 +731,13 @@ export default function WordBuddyApp() {
         stats={stats}
         grind={grind}
         onClose={() => setAchievementsOpen(false)}
+      />
+      <HelpCenterDialog
+        open={helpCenter.open}
+        initialSection={helpCenter.section}
+        celebrate={helpCenter.celebrate}
+        onClose={helpCenter.closeHelp}
+        onSectionChange={helpCenter.setSection}
       />
       <AchievementToast
         achievement={achievements.currentAchievement}

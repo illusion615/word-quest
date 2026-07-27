@@ -3,7 +3,7 @@ import type { CoverageIndexData } from '../domain/coverage';
 import { EXAM_BANK_MANIFEST } from './exam-bank-metadata.generated';
 
 const examDescriptions: Record<string, { description: string; level: string }> = {
-  gaokao: { description: '高中课程与高考大纲词汇范围', level: '高中 / 高考' },
+  gaokao: { description: '教育部高中英语课程标准 3,000 词范围', level: '高中课标' },
   cet4: { description: '大学英语四级大纲标注词汇', level: 'CET-4' },
   cet6: { description: '四级基础加六级增量的完整范围', level: 'CET-6' },
   ielts: { description: '面向雅思备考的综合词汇范围', level: 'IELTS 备考' },
@@ -18,9 +18,9 @@ export const WORD_BANKS: WordBankManifest[] = EXAM_BANK_MANIFEST.banks.map((bank
     count: bank.count,
     basis: bank.basis,
     status: bank.status,
-    sourceName: EXAM_BANK_MANIFEST.source.name,
-    sourceUrl: EXAM_BANK_MANIFEST.source.repository,
-    sourceVersion: `${EXAM_BANK_MANIFEST.source.date} · ${EXAM_BANK_MANIFEST.source.commit.slice(0, 7)}`,
+    sourceName: bank.sourceName,
+    sourceUrl: bank.sourceUrl,
+    sourceVersion: bank.sourceVersion,
     dataFile: bank.file,
   } satisfies WordBankManifest));
 

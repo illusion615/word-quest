@@ -11,6 +11,7 @@ import {
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer as createViteServer } from 'vite';
+import { resolveWordGridState, wordGridDeltaForEvent } from './lib/wordGridState.mjs';
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const bankDirectory = resolve(projectRoot, 'public/data/exam-banks');
@@ -18,9 +19,13 @@ const coachDirectory = resolve(projectRoot, 'public/data/word-coach');
 const shardDirectory = resolve(coachDirectory, 'v1');
 const internalDirectory = resolve(projectRoot, '.word-coach');
 const statePath = resolve(internalDirectory, 'dashboard-state.json');
-const failurePath = resolve(internalDirectory, 'failures.json');
+const credentialsPath = resolve(internalDirectory, 'credentials.json');
+const partialSensePath = resolve(internalDirectory, 'partial-sense-content.json');
 const dashboardPath = resolve(projectRoot, 'scripts/word-coach-dashboard.html');
-const generatorPath = resolve(projectRoot, 'scripts/generate-word-coach.mjs');
+const lexiconPath = resolve(projectRoot, 'public/data/lexicon/words.json');
+const wordQuestLogoPath = resolve(projectRoot, 'scripts/assets/word-quest-lexicon-forge-logo.png');
+const lilitaFontPath = resolve(projectRoot, 'node_modules/@fontsource/lilita-one/files/lilita-one-latin-400-normal.woff2');
+const pipelinePath = resolve(projectRoot, 'scripts/run-word-coach-pipeline.mjs');
 const port = Number(process.env.WORDBUDDY_COACH_DASHBOARD_PORT ?? 4175);
 const host = process.env.WORDBUDDY_COACH_DASHBOARD_HOST ?? '127.0.0.1';
 const MAX_EVENTS = 160;
@@ -31,14 +36,14 @@ if (!Number.isInteger(port) || port <= 0 || port > 65535) {
 }
 
 const defaultState = {
-  version: 2,
+  version: 4,
   settings: {
     endpoint: process.env.WORDBUDDY_AI_ENDPOINT ?? 'http://127.0.0.1:8191/v1',
     model: process.env.WORDBUDDY_AI_MODEL ?? 'Qwen3.6-35B-A3B-4bit',
+    apiKey: process.env.WORDBUDDY_AI_API_KEY ?? '',
     authMode: process.env.WORDBUDDY_AI_AUTH_MODE === 'api-key' ? 'api-key' : 'bearer',
     outputLanguage: process.env.WORDBUDDY_AI_OUTPUT_LANGUAGE ?? 'Simplified Chinese',
     concurrency: 2,
-    qualityMode: 'unreviewed',
   },
   job: {
     status: 'idle',
@@ -67,14 +72,22 @@ async function loadState() {
       job: { ...defaultState.job, ...stored.job },
       events: Array.isArray(stored.events) ? stored.events.slice(-MAX_EVENTS) : [],
     };
-    if (Number(stored.version ?? 0) < 2 || state.settings.qualityMode === 'fast') {
-      state.version = 2;
-      state.settings.qualityMode = 'unreviewed';
+    if (Number(stored.version ?? 0) < 4) {
+      state.version = 4;
+      delete state.settings.qualityMode;
     }
     if (state.job.status === 'running') {
       state.job.status = 'paused';
       state.job.pausedAt = new Date().toISOString();
       state.job.lastError = '控制台服务曾中断，已从磁盘检查点恢复为暂停状态。';
+    } else if (state.job.status === 'failed') {
+      // A freshly started console owns no live generator, so a prior non-zero
+      // exit (e.g. a handful of hard words that miss the quality gate) is
+      // resumable rather than terminal. Present it as paused and drop the stale
+      // process-exit banner; per-word failures still surface in the failures list.
+      state.job.status = 'paused';
+      state.job.pausedAt = new Date().toISOString();
+      state.job.lastError = null;
     }
     return state;
   } catch {
@@ -83,14 +96,20 @@ async function loadState() {
 }
 
 let dashboardState = await loadState();
+dashboardState.settings.apiKey = await loadStoredApiKey() || dashboardState.settings.apiKey;
 let persistChain = Promise.resolve();
+let storageError = null;
 let childProcess = null;
 let childLineBuffer = '';
 let generatorCompleteEvent = null;
+let generationOverride = null;
+let wordGridRevision = 0;
+let canonicalLexicon = { schemaVersion: 3, words: {} };
 let corpusScan = {
   generatedIds: new Set(),
   invalid: [],
   records: new Map(),
+  staleCount: 0,
   storageBytes: 0,
   shardCount: 0,
   scannedAt: null,
@@ -99,6 +118,7 @@ const activeWords = new Map();
 const sseClients = new Set();
 
 const bankManifest = JSON.parse(await readFile(resolve(bankDirectory, 'manifest.json'), 'utf8'));
+canonicalLexicon = JSON.parse(await readFile(lexiconPath, 'utf8'));
 const wordsById = new Map();
 const wordIdsByBank = new Map();
 
@@ -119,17 +139,13 @@ const wordText = await vite.ssrLoadModule('/src/domain/wordText.ts');
 const journey = await vite.ssrLoadModule('/src/domain/journey.ts');
 const {
   WORD_COACH_PROMPT_VERSION,
-  WORD_COACH_REVIEW_VERSION,
   WORD_COACH_SCHEMA_VERSION,
   assessWordCoachQuality,
-  wordCoachContentHash,
-  wordCoachRecordHasSourceConflict,
-  wordCoachRequiresSemanticReview,
   wordCoachShardId,
   wordCoachSourceHash,
 } = coachContract;
-const { parseStoredWordExplanation } = aiClient;
-const { parseDefinitionSenses } = wordText;
+const { parseStoredWordExplanation, requestCompletion } = aiClient;
+const { parseDefinitionSenses, parseWordSenses } = wordText;
 const { orderWordsByJourney } = journey;
 const orderedWordIdsByBank = new Map(bankManifest.banks.map((bank) => [
   bank.id,
@@ -165,6 +181,30 @@ if (dashboardState.job.promptVersion !== WORD_COACH_PROMPT_VERSION
   dashboardState.events = [];
 }
 
+async function loadStoredApiKey() {
+  try {
+    const stored = JSON.parse(await readFile(credentialsPath, 'utf8'));
+    return String(stored.apiKey ?? '').trim();
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Credentials live outside dashboard-state.json so the shareable state file
+ * never carries a secret, and the key file stays owner-only.
+ */
+async function persistApiKey(apiKey) {
+  await mkdir(internalDirectory, { recursive: true });
+  const temporary = `${credentialsPath}.${process.pid}.tmp`;
+  await writeFile(temporary, `${JSON.stringify({ apiKey }, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
+  await rename(temporary, credentialsPath);
+}
+
+/**
+ * A failed write must never take the console down or wedge the queue: the
+ * in-memory state stays authoritative and the reason surfaces in the UI.
+ */
 function persistState() {
   const sanitized = {
     ...dashboardState,
@@ -173,11 +213,18 @@ function persistState() {
     ),
   };
   const snapshot = JSON.stringify(sanitized, null, 2);
-  persistChain = persistChain.then(async () => {
-    await mkdir(internalDirectory, { recursive: true });
-    const temporary = `${statePath}.${process.pid}.tmp`;
-    await writeFile(temporary, `${snapshot}\n`, 'utf8');
-    await rename(temporary, statePath);
+  persistChain = persistChain.catch(() => {}).then(async () => {
+    try {
+      await mkdir(internalDirectory, { recursive: true });
+      const temporary = `${statePath}.${process.pid}.tmp`;
+      await writeFile(temporary, `${snapshot}\n`, 'utf8');
+      await rename(temporary, statePath);
+      storageError = null;
+    } catch (error) {
+      storageError = error.code === 'ENOSPC'
+        ? '磁盘空间不足，控制台状态无法写盘；进度仍在内存中，请清理磁盘后重试。'
+        : `控制台状态写盘失败：${error.message}`;
+    }
   });
   return persistChain;
 }
@@ -193,6 +240,59 @@ function addEvent(type, data = {}) {
 
 function chineseSenseCount(word) {
   return parseDefinitionSenses(word.definitionZh).length;
+}
+
+function humanizeSenseIds(message, wordId) {
+  if (typeof message !== 'string' || !message || !wordId) return message;
+  const word = wordsById.get(wordId);
+  if (!word) return message;
+  let readable = message;
+  parseWordSenses(word).forEach((sense, index) => {
+    if (!sense.id || !readable.includes(sense.id)) return;
+    const description = [sense.label, sense.text].filter(Boolean).join(' ');
+    readable = readable.split(sense.id).join(`第 ${index + 1} 个义项（${description}）`);
+  });
+  return readable
+    .replace(/缺少\s*(第 \d+ 个义项（[^）]+）)\s*例句/gu, '缺少$1的例句')
+    .replace(/为\s*(第 \d+ 个义项（[^）]+）)\s*返回/gu, '为$1返回');
+}
+
+function presentEvent(event) {
+  if (!event || typeof event !== 'object') return event;
+  return {
+    ...event,
+    message: humanizeSenseIds(event.message, event.wordId),
+  };
+}
+
+/** The stored key wins; the launch environment stays a fallback. */
+function resolvedApiKey() {
+  return String(dashboardState.settings.apiKey || process.env.WORDBUDDY_AI_API_KEY || '').trim();
+}
+
+/** Connection config for a live model call. Never leaves the server process. */
+function connectionConfig(overrides = {}) {
+  return {
+    endpoint: String(overrides.endpoint ?? dashboardState.settings.endpoint).trim(),
+    model: String(overrides.model ?? dashboardState.settings.model).trim(),
+    apiKey: String(overrides.apiKey ?? resolvedApiKey()).trim(),
+    authMode: (overrides.authMode ?? dashboardState.settings.authMode) === 'api-key'
+      ? 'api-key'
+      : 'bearer',
+    outputLanguage: String(overrides.outputLanguage ?? dashboardState.settings.outputLanguage).trim(),
+  };
+}
+
+function senseGapSummary(wordIds) {
+  let senses = 0;
+  let fromDictionary = 0;
+  for (const wordId of wordIds) {
+    for (const sense of canonicalLexicon.words?.[wordId]?.senses ?? []) {
+      senses += 1;
+      if (sense.examples?.length > 0) fromDictionary += 1;
+    }
+  }
+  return { senses, fromDictionary, generated: senses - fromDictionary };
 }
 
 function selectPilotWordIds(bankId, size) {
@@ -213,28 +313,13 @@ function inspectRecord(wordId, record, outputLanguage) {
   if (record.sourceHash !== wordCoachSourceHash(word)) throw new Error('词典指纹已过期。');
   const explanation = parseStoredWordExplanation(
     record,
-    chineseSenseCount(word),
+    parseWordSenses(word),
     word.word,
   );
-  if (wordCoachRecordHasSourceConflict(word, record)) {
-    return {
-      word,
-      record,
-      explanation,
-      issues: record.qualityReview?.issues ?? [],
-      status: 'source-conflict',
-    };
-  }
   if (record.promptVersion !== WORD_COACH_PROMPT_VERSION) throw new Error('提示词版本已过期。');
   const heuristicIssues = assessWordCoachQuality(word, explanation, outputLanguage);
-  const review = record.qualityReview;
-  const reviewIsCurrent = review
-    && review.reviewVersion === WORD_COACH_REVIEW_VERSION
-    && review.contentHash === wordCoachContentHash(explanation);
-  const semanticIssues = reviewIsCurrent ? review.issues : [];
-  const issues = [...heuristicIssues, ...semanticIssues];
-  const hasError = issues.some((issue) => issue.severity === 'error')
-    || (reviewIsCurrent && review.verdict === 'fail');
+  const issues = heuristicIssues;
+  const hasError = issues.some((issue) => issue.severity === 'error');
   return {
     word,
     record,
@@ -252,6 +337,7 @@ async function scanCorpus() {
   const generatedIds = new Set();
   const invalid = [];
   const records = new Map();
+  let staleCount = 0;
   let storageBytes = 0;
   const filenames = (await readdir(shardDirectory).catch(() => []))
     .filter((filename) => /^[0-9a-f]{2}\.json$/.test(filename));
@@ -276,6 +362,12 @@ async function scanCorpus() {
         if (wordCoachShardId(wordId) !== filename.slice(0, 2)) {
           throw new Error('词条存放在错误分片。');
         }
+        const word = wordsById.get(wordId);
+        if (!word) throw new Error('词条不在考试词库中。');
+        if (record.promptVersion !== WORD_COACH_PROMPT_VERSION) {
+          staleCount += 1;
+          continue;
+        }
         const inspected = inspectRecord(wordId, record, outputLanguage);
         records.set(wordId, inspected);
         if (inspected.status === 'pass' || inspected.status === 'warning') generatedIds.add(wordId);
@@ -295,6 +387,7 @@ async function scanCorpus() {
     generatedIds,
     invalid,
     records,
+    staleCount,
     storageBytes,
     shardCount: filenames.length,
     scannedAt: new Date().toISOString(),
@@ -337,37 +430,16 @@ function targetIds() {
       );
 }
 
-function recordSatisfiesQualityMode(inspected) {
-  if (!inspected || !['pass', 'warning'].includes(inspected.status)) return false;
-  if (!wordCoachRequiresSemanticReview(
-    inspected.word,
-    dashboardState.settings.qualityMode,
-  )) return true;
-  const review = inspected.record.qualityReview;
-  return Boolean(review
-    && review.reviewVersion === WORD_COACH_REVIEW_VERSION
-    && review.contentHash === wordCoachContentHash(inspected.explanation)
-    && review.verdict !== 'fail');
-}
-
-function recordHasCurrentFailedReview(inspected) {
-  if (!inspected) return false;
-  const review = inspected.record.qualityReview;
-  return Boolean(review
-    && review.reviewVersion === WORD_COACH_REVIEW_VERSION
-    && review.contentHash === wordCoachContentHash(inspected.explanation)
-    && review.verdict === 'fail');
+function recordIsGenerated(inspected) {
+  return Boolean(inspected && ['pass', 'warning'].includes(inspected.status));
 }
 
 function reconcileJobWithCorpus() {
   if (childProcess || ['running', 'pausing'].includes(dashboardState.job.status)) return false;
   const targets = targetIds();
-  const resolved = targets.length > 0 && targets.every((wordId) => {
-    const inspected = corpusScan.records.get(wordId);
-    return recordSatisfiesQualityMode(inspected)
-      || inspected?.status === 'source-conflict'
-      || recordHasCurrentFailedReview(inspected);
-  });
+  const resolved = targets.length > 0 && targets.every((wordId) => (
+    recordIsGenerated(corpusScan.records.get(wordId))
+  ));
   if (!resolved) {
     if (dashboardState.job.status !== 'completed') return false;
     dashboardState.job.status = 'paused';
@@ -389,33 +461,17 @@ function statusPayload() {
   const targets = targetIds();
   const targetSet = new Set(targets);
   const completedIds = targets.filter((wordId) => (
-    recordSatisfiesQualityMode(corpusScan.records.get(wordId))
+    recordIsGenerated(corpusScan.records.get(wordId))
   ));
   const inspectedTargets = [...corpusScan.records.entries()]
     .filter(([wordId]) => targetSet.has(wordId));
-  const sourceConflictIds = inspectedTargets
-    .filter(([, record]) => record.status === 'source-conflict')
-    .map(([wordId]) => wordId);
-  const reviewRejectedIds = inspectedTargets
-    .filter(([, record]) => (
-      record.status !== 'source-conflict' && recordHasCurrentFailedReview(record)
-    ))
-    .map(([wordId]) => wordId);
-  const reviewPendingIds = inspectedTargets
-    .filter(([, record]) => (
-      ['pass', 'warning'].includes(record.status)
-      && wordCoachRequiresSemanticReview(record.word, dashboardState.settings.qualityMode)
-      && !recordSatisfiesQualityMode(record)
-    ))
-    .map(([wordId]) => wordId);
   const quality = {
     pass: inspectedTargets.filter(([, record]) => record.status === 'pass').length,
     warning: inspectedTargets.filter(([, record]) => record.status === 'warning').length,
-    sourceConflict: sourceConflictIds.length,
     invalid: corpusScan.invalid.filter((record) => targetSet.has(record.wordId)).length,
   };
   const completionEvents = dashboardState.events.filter((event) => (
-    event.type === 'word-complete' || event.type === 'word-blocked'
+    event.type === 'word-complete'
   ));
   const recentCompletions = completionEvents.slice(-30);
   let wordsPerMinute = 0;
@@ -427,7 +483,7 @@ function statusPayload() {
     wordsPerMinute = (60000 / recentCompletions[0].durationMs)
       * dashboardState.settings.concurrency;
   }
-  const resolved = completedIds.length + sourceConflictIds.length + reviewRejectedIds.length;
+  const resolved = completedIds.length;
   const remaining = Math.max(0, targets.length - resolved);
   const etaSeconds = wordsPerMinute > 0 ? (remaining / wordsPerMinute) * 60 : null;
   const recentIds = completionEvents
@@ -450,13 +506,18 @@ function statusPayload() {
   const failureEvents = dashboardState.events
     .filter((event) => event.type === 'word-failed')
     .slice(-20)
-    .reverse();
+    .reverse()
+    .map(presentEvent);
 
   return {
     serverTime: new Date().toISOString(),
+    wordGridRevision,
+    storageError,
     settings: {
+      // The key itself never leaves the server; the client only learns whether one exists.
       ...dashboardState.settings,
-      apiKeyConfigured: Boolean(process.env.WORDBUDDY_AI_API_KEY),
+      apiKey: undefined,
+      apiKeyConfigured: Boolean(resolvedApiKey()),
     },
     job: {
       ...dashboardState.job,
@@ -464,15 +525,13 @@ function statusPayload() {
       targetTotal: targets.length,
       completed: completedIds.length,
       resolved,
-      sourceConflict: sourceConflictIds.length,
       remaining,
-      generationPending: Math.max(0, remaining - reviewPendingIds.length),
-      reviewPending: reviewPendingIds.length,
+      generationPending: remaining,
       progressPercent: targets.length > 0 ? (resolved / targets.length) * 100 : 0,
       wordsPerMinute,
       etaSeconds,
     },
-    activeWords: [...activeWords.values()],
+    activeWords: [...activeWords.values()].map(presentEvent),
     quality,
     corpus: {
       generatedCount: corpusScan.generatedIds.size,
@@ -490,66 +549,183 @@ function statusPayload() {
         }];
       })),
       invalidCount: corpusScan.invalid.length,
-      sourceConflictCount: [...corpusScan.records.values()]
-        .filter((record) => record.status === 'source-conflict').length,
+      staleCount: corpusScan.staleCount,
       shardCount: corpusScan.shardCount,
       storageBytes: corpusScan.storageBytes,
       scannedAt: corpusScan.scannedAt,
     },
+    senseGap: senseGapSummary(targets),
     recentRecords,
     failures: failureEvents,
-    events: dashboardState.events.slice(-40).reverse(),
+    events: dashboardState.events.slice(-40).reverse().map(presentEvent),
     pilotWords: targets.slice(0, dashboardState.job.scope === 'pilot' ? targets.length : 20)
       .map((wordId) => ({
         wordId,
         word: wordsById.get(wordId)?.word ?? wordId,
         senseCount: wordsById.has(wordId) ? chineseSenseCount(wordsById.get(wordId)) : 0,
         completed: corpusScan.generatedIds.has(wordId),
-        reviewPending: reviewPendingIds.includes(wordId),
-        sourceConflict: corpusScan.records.get(wordId)?.status === 'source-conflict',
-        reviewRejected: reviewRejectedIds.includes(wordId),
       })),
   };
 }
 
-function broadcast() {
-  const data = `data: ${JSON.stringify(statusPayload())}\n\n`;
+function latestFailedWordIds() {
+  const failed = new Set();
+  for (const event of dashboardState.events) {
+    if (!event.wordId) continue;
+    if (event.type === 'word-failed') failed.add(event.wordId);
+    else if (event.type === 'word-complete') failed.delete(event.wordId);
+  }
+  return failed;
+}
+
+function wordGridSnapshot() {
+  const targets = targetIds();
+  const failures = latestFailedWordIds();
+  const invalid = new Set(corpusScan.invalid.map((item) => item.wordId));
+  const cells = targets.map((wordId, index) => {
+    const word = wordsById.get(wordId);
+    const active = activeWords.get(wordId) ?? null;
+    const recordStatus = corpusScan.records.get(wordId)?.status ?? (invalid.has(wordId) ? 'invalid' : null);
+    const state = resolveWordGridState({
+      active,
+      recordStatus,
+      failed: failures.has(wordId),
+    });
+    return {
+      index,
+      wordId,
+      word: word?.word ?? wordId,
+      state,
+      senseCount: word ? chineseSenseCount(word) : 0,
+      laneId: active?.laneId ?? null,
+      phase: active?.phase ?? null,
+      attempt: active?.attempt ?? null,
+      maxAttempts: active?.maxAttempts ?? null,
+      startedAt: active?.startedAt ?? active?.timestamp ?? null,
+    };
+  });
+  const counts = Object.fromEntries(
+    ['pending', 'processing', 'retrying', 'pass', 'warning', 'failed']
+      .map((state) => [state, cells.filter((cell) => cell.state === state).length]),
+  );
+  return {
+    revision: wordGridRevision,
+    generatedAt: new Date().toISOString(),
+    total: cells.length,
+    bank: dashboardState.job.bank,
+    scope: dashboardState.job.scope,
+    counts,
+    cells,
+  };
+}
+
+async function wordGridDetail(wordId) {
+  const snapshot = wordGridSnapshot();
+  const cell = snapshot.cells.find((candidate) => candidate.wordId === wordId);
+  if (!cell) return null;
+  const word = wordsById.get(wordId);
+  const inspected = corpusScan.records.get(wordId);
+  const partialDocument = JSON.parse(
+    await readFile(partialSensePath, 'utf8').catch(() => '{"records":{}}'),
+  );
+  const partialRecord = partialDocument.records?.[wordId];
+  const currentPartial = partialRecord?.promptVersion === WORD_COACH_PROMPT_VERSION
+    && partialRecord.sourceHash === wordCoachSourceHash(word)
+    ? partialRecord
+    : null;
+  const active = activeWords.get(wordId) ?? null;
+  const events = dashboardState.events
+    .filter((event) => event.wordId === wordId)
+    .slice(-12)
+    .reverse()
+    .map(presentEvent);
+  const senses = word ? parseWordSenses(word) : [];
+  const targetSenseIds = new Set(active?.senseIds
+    ?? currentPartial?.failedSenseIds
+    ?? []);
+  if (cell.state === 'failed' && targetSenseIds.size === 0) {
+    const failureMessage = events.find((event) => event.type === 'word-failed')?.message ?? '';
+    for (const match of failureMessage.matchAll(/第\s*(\d+)\s*个义项/gu)) {
+      const sense = senses[Number(match[1]) - 1];
+      if (sense?.id) targetSenseIds.add(sense.id);
+    }
+  }
+  return {
+    cell,
+    word,
+    // Same sense spine the record dialog uses, so both views split glosses
+    // through one parser instead of re-deriving them in the browser.
+    senses,
+    dictionarySenses: canonicalLexicon.words?.[wordId]?.senses ?? [],
+    partialSenseContent: currentPartial?.senseContent ?? {},
+    targetSenseIds: [...targetSenseIds],
+    levelNumber: Math.floor(cell.index / 25) + 1,
+    positionInLevel: (cell.index % 25) + 1,
+    active,
+    senseGap: senseGapSummary([wordId]),
+    events,
+    record: inspected ? {
+      status: inspected.status,
+      issues: inspected.issues,
+      explanation: inspected.explanation,
+    } : null,
+  };
+}
+
+function broadcast(gridDelta = null) {
+  const payload = statusPayload();
+  if (gridDelta) payload.wordGridDelta = gridDelta;
+  const data = `data: ${JSON.stringify(payload)}\n\n`;
   sseClients.forEach((response) => response.write(data));
 }
 
 async function handleGeneratorEvent(event) {
   if (!event || typeof event !== 'object' || typeof event.type !== 'string') return;
   if (event.type === 'word-start') {
-    activeWords.set(event.wordId, event);
+    activeWords.set(event.wordId, { ...event, startedAt: event.timestamp });
   } else if (event.type === 'word-retry') {
+    activeWords.set(event.wordId, { ...activeWords.get(event.wordId), ...event });
+  } else if (event.type === 'word-writing') {
     activeWords.set(event.wordId, { ...activeWords.get(event.wordId), ...event });
   } else if (event.type === 'word-complete') {
     activeWords.delete(event.wordId);
     await refreshWord(event.wordId);
+  } else if (event.type === 'word-partial-complete') {
+    activeWords.delete(event.wordId);
   } else if (event.type === 'word-failed') {
     activeWords.delete(event.wordId);
-  } else if (event.type === 'word-blocked') {
-    activeWords.delete(event.wordId);
-    await refreshWord(event.wordId);
   } else if (event.type === 'complete') {
     generatorCompleteEvent = event;
   }
+  const gridDelta = wordGridDeltaForEvent(event);
+  const partialRefresh = event.type === 'word-partial-complete';
+  if (gridDelta || partialRefresh) wordGridRevision += 1;
   addEvent(event.type, event);
   await persistState();
-  broadcast();
+  broadcast(gridDelta
+    ? presentEvent({ revision: wordGridRevision, ...gridDelta })
+    : partialRefresh
+      ? { revision: wordGridRevision, type: 'refresh' }
+      : null);
 }
 
 function childArguments() {
+  const bank = generationOverride?.bank
+    ?? (dashboardState.job.scope === 'all' ? 'all' : dashboardState.job.bank);
   const args = [
-    generatorPath,
-    '--bank', dashboardState.job.scope === 'all' ? 'all' : dashboardState.job.bank,
+    pipelinePath,
+    '--bank', bank,
     '--concurrency', String(dashboardState.settings.concurrency),
     '--retries', '1',
-    '--quality-mode', dashboardState.settings.qualityMode,
     '--json-events',
     '--execute',
   ];
-  if (dashboardState.job.scope === 'pilot') {
+  if (generationOverride?.wordIds.length) {
+    args.push('--only', generationOverride.wordIds.join(','));
+    if (generationOverride.senseIds?.length) {
+      args.push('--sense', generationOverride.senseIds.join(','));
+    }
+  } else if (dashboardState.job.scope === 'pilot') {
     args.push('--only', dashboardState.job.targetWordIds.join(','));
   }
   return args;
@@ -558,10 +734,10 @@ function childArguments() {
 async function startGeneration() {
   if (childProcess) throw new Error('生成任务已经在运行。');
   if (!dashboardState.settings.endpoint.trim() || !dashboardState.settings.model.trim()) {
-    throw new Error('请先填写模型端点和模型 ID。');
+    throw new Error('请先在「模型设置」里填写模型端点和模型 ID。');
   }
-  if (!process.env.WORDBUDDY_AI_API_KEY) {
-    throw new Error('启动控制台时必须通过 WORDBUDDY_AI_API_KEY 提供密钥或本地占位值。');
+  if (!resolvedApiKey()) {
+    throw new Error('请先在「模型设置」里填写并测试 API Key。');
   }
 
   dashboardState.job.status = 'running';
@@ -587,6 +763,7 @@ async function startGeneration() {
       ...process.env,
       WORDBUDDY_AI_ENDPOINT: dashboardState.settings.endpoint,
       WORDBUDDY_AI_MODEL: dashboardState.settings.model,
+      WORDBUDDY_AI_API_KEY: resolvedApiKey(),
       WORDBUDDY_AI_AUTH_MODE: dashboardState.settings.authMode,
       WORDBUDDY_AI_OUTPUT_LANGUAGE: dashboardState.settings.outputLanguage,
     },
@@ -613,8 +790,10 @@ async function startGeneration() {
   });
   childProcess.on('exit', async (code, signal) => {
     const wasPaused = dashboardState.job.pauseRequested;
+    const usedOverride = Boolean(generationOverride);
     const failedWordCount = Number(generatorCompleteEvent?.failureCount ?? 0);
     childProcess = null;
+    generationOverride = null;
     activeWords.clear();
     await scanCorpus();
     const recoverableFailure = !wasPaused
@@ -639,9 +818,11 @@ async function startGeneration() {
     }
     dashboardState.job.pauseRequested = false;
     generatorCompleteEvent = null;
+    if (usedOverride) reconcileJobWithCorpus();
     addEvent(wasPaused ? 'job-paused' : 'job-finished', { code, signal });
     await persistState();
-    broadcast();
+    wordGridRevision += 1;
+    broadcast({ revision: wordGridRevision, type: 'refresh' });
   });
   broadcast();
 }
@@ -676,6 +857,20 @@ async function handleApi(request, response, url) {
     json(response, 200, statusPayload());
     return;
   }
+  if (request.method === 'GET' && url.pathname === '/api/grid') {
+    json(response, 200, wordGridSnapshot());
+    return;
+  }
+  if (request.method === 'GET' && url.pathname === '/api/grid/word') {
+    const wordId = url.searchParams.get('id') ?? '';
+    const detail = await wordGridDetail(wordId);
+    if (!detail) {
+      json(response, 404, { error: '该词不在当前生成任务中。' });
+      return;
+    }
+    json(response, 200, detail);
+    return;
+  }
   if (request.method === 'GET' && url.pathname === '/api/record') {
     const wordId = url.searchParams.get('id') ?? '';
     const inspected = corpusScan.records.get(wordId);
@@ -685,6 +880,9 @@ async function handleApi(request, response, url) {
     }
     json(response, 200, {
       word: inspected.word,
+      // The dialog renders one card per sense, so it needs the sense spine
+      // (id/label/text) alongside the generated content keyed by the same ids.
+      senses: parseWordSenses(inspected.word),
       explanation: inspected.explanation,
       status: inspected.status,
       issues: inspected.issues,
@@ -722,9 +920,6 @@ async function handleApi(request, response, url) {
         model: String(body.model ?? dashboardState.settings.model).trim(),
         outputLanguage: String(body.outputLanguage ?? dashboardState.settings.outputLanguage).trim(),
         authMode: body.authMode === 'api-key' ? 'api-key' : 'bearer',
-        qualityMode: ['unreviewed', 'balanced', 'strict'].includes(body.qualityMode)
-          ? body.qualityMode
-          : 'unreviewed',
         concurrency,
       };
       if (changedJob || dashboardState.job.targetWordIds.length === 0) {
@@ -743,6 +938,116 @@ async function handleApi(request, response, url) {
     }
     return;
   }
+  if (request.method === 'POST' && url.pathname === '/api/target') {
+    try {
+      if (childProcess) throw new Error('生成进行中，请先暂停再切换目标。');
+      const body = await readJsonBody(request);
+      const scope = ['pilot', 'bank', 'all'].includes(body.scope) ? body.scope : dashboardState.job.scope;
+      const bank = wordIdsByBank.has(body.bank) ? body.bank : dashboardState.job.bank;
+      const pilotSize = Math.min(200, Math.max(1, Number(body.pilotSize) || dashboardState.job.pilotSize));
+      const concurrency = Math.min(16, Math.max(1, Number(body.concurrency)
+        || dashboardState.settings.concurrency));
+      dashboardState.settings = { ...dashboardState.settings, concurrency };
+      dashboardState.job = {
+        ...dashboardState.job,
+        scope,
+        bank,
+        pilotSize,
+        status: 'idle',
+        targetWordIds: [],
+        startedAt: null,
+        pausedAt: null,
+        finishedAt: null,
+        lastError: null,
+        pauseRequested: false,
+      };
+      reconcileJobWithCorpus();
+      await persistState();
+      wordGridRevision += 1;
+      broadcast({ revision: wordGridRevision, type: 'refresh' });
+      json(response, 200, statusPayload());
+    } catch (error) {
+      json(response, 400, { error: error instanceof Error ? error.message : String(error) });
+    }
+    return;
+  }
+  if (request.method === 'POST' && url.pathname === '/api/connection/test') {
+    try {
+      const body = await readJsonBody(request);
+      const candidate = connectionConfig({
+        endpoint: body.endpoint,
+        model: body.model,
+        // An empty field means "keep the stored key" so the UI never has to echo it back.
+        apiKey: String(body.apiKey ?? '').trim() || resolvedApiKey(),
+        authMode: body.authMode,
+      });
+      if (!candidate.endpoint) throw new Error('请填写模型端点。');
+      if (!candidate.model) throw new Error('请填写模型 ID。');
+      if (!candidate.apiKey) throw new Error('请填写 API Key（本地模型可填任意占位值）。');
+      const started = Date.now();
+      const reply = await requestCompletion(
+        candidate,
+        [{ role: 'user', content: 'Reply with the single word: ready' }],
+        fetch,
+        { temperature: 0, maxTokens: 16 },
+      );
+      dashboardState.settings = {
+        ...dashboardState.settings,
+        endpoint: candidate.endpoint,
+        model: candidate.model,
+        apiKey: candidate.apiKey,
+        authMode: candidate.authMode,
+      };
+      await persistApiKey(candidate.apiKey);
+      await persistState();
+      addEvent('connection-verified', { model: candidate.model, endpoint: candidate.endpoint });
+      broadcast();
+      json(response, 200, {
+        ...statusPayload(),
+        connectionTest: {
+          ok: true,
+          latencyMs: Date.now() - started,
+          reply: String(reply).replace(/\s+/g, ' ').trim().slice(0, 80),
+        },
+      });
+    } catch (error) {
+      json(response, 400, { error: error instanceof Error ? error.message : String(error) });
+    }
+    return;
+  }
+  if (request.method === 'POST' && url.pathname === '/api/retry') {
+    try {
+      if (childProcess) throw new Error('生成进行中，请先暂停再重跑单个词。');
+      const body = await readJsonBody(request);
+      const wordId = String(body.wordId ?? '').trim();
+      const word = wordsById.get(wordId);
+      if (!word) throw new Error('该词不在考试词库中。');
+      const senseId = String(body.senseId ?? '').trim();
+      if (senseId && !parseWordSenses(word).some((sense) => sense.id === senseId)) {
+        throw new Error('该义项不属于当前词条。');
+      }
+      const bank = bankManifest.banks
+        .find((candidate) => (wordIdsByBank.get(candidate.id) ?? []).includes(wordId))?.id
+        ?? dashboardState.job.bank;
+      generationOverride = {
+        bank,
+        wordIds: [wordId],
+        senseIds: senseId ? [senseId] : [],
+      };
+      try {
+        await startGeneration();
+      } catch (error) {
+        generationOverride = null;
+        throw error;
+      }
+      wordGridRevision += 1;
+      broadcast({ revision: wordGridRevision, type: 'refresh' });
+      json(response, 202, statusPayload());
+    } catch (error) {
+      json(response, 400, { error: error instanceof Error ? error.message : String(error) });
+    }
+    return;
+  }
   if (request.method === 'POST' && url.pathname === '/api/pause') {
     await pauseGeneration();
     json(response, 202, statusPayload());
@@ -754,7 +1059,8 @@ async function handleApi(request, response, url) {
     addEvent('corpus-rescanned', { generatedCount: corpusScan.generatedIds.size });
     if (jobReconciled) addEvent('job-reconciled', { status: dashboardState.job.status });
     await persistState();
-    broadcast();
+    wordGridRevision += 1;
+    broadcast({ revision: wordGridRevision, type: 'refresh' });
     json(response, 200, statusPayload());
     return;
   }
@@ -765,7 +1071,11 @@ await scanCorpus();
 reconcileJobWithCorpus();
 await persistState();
 
-const dashboardHtml = await readFile(dashboardPath, 'utf8');
+const [dashboardHtml, wordQuestLogo, lilitaFont] = await Promise.all([
+  readFile(dashboardPath, 'utf8'),
+  readFile(wordQuestLogoPath),
+  readFile(lilitaFontPath),
+]);
 const server = createHttpServer(async (request, response) => {
   try {
     const url = new URL(request.url ?? '/', `http://${request.headers.host ?? `${host}:${port}`}`);
@@ -779,6 +1089,22 @@ const server = createHttpServer(async (request, response) => {
         'Cache-Control': 'no-store',
       });
       response.end(dashboardHtml);
+      return;
+    }
+    if (url.pathname === '/word-quest-lexicon-forge-logo.png') {
+      response.writeHead(200, {
+        'Content-Type': 'image/png',
+        'Cache-Control': 'no-cache',
+      });
+      response.end(wordQuestLogo);
+      return;
+    }
+    if (url.pathname === '/lilita-one.woff2') {
+      response.writeHead(200, {
+        'Content-Type': 'font/woff2',
+        'Cache-Control': 'public, max-age=86400',
+      });
+      response.end(lilitaFont);
       return;
     }
     if (url.pathname === '/favicon.ico') {
@@ -805,6 +1131,16 @@ async function shutdown() {
   server.close();
   await vite.close();
 }
+
+// A long-running console must survive transient I/O faults (a full disk, a
+// vanished shard) instead of exiting and leaving the browser with "Failed to
+// fetch". Report the reason and keep serving from memory.
+process.on('unhandledRejection', (reason) => {
+  const message = reason instanceof Error ? reason.message : String(reason);
+  storageError = `控制台后台任务出错：${message}`;
+  addEvent('stderr', { message });
+  broadcast();
+});
 
 process.once('SIGINT', () => { void shutdown().finally(() => process.exit(0)); });
 process.once('SIGTERM', () => { void shutdown().finally(() => process.exit(0)); });

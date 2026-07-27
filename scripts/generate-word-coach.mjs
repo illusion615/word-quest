@@ -13,9 +13,11 @@ import { createServer } from 'vite';
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const examBankDirectory = resolve(projectRoot, 'public/data/exam-banks');
+const lexiconPath = resolve(projectRoot, 'public/data/lexicon/words.json');
 let outputRoot = resolve(projectRoot, 'public/data/word-coach');
 const failureDirectory = resolve(projectRoot, '.word-coach');
 const failurePath = resolve(failureDirectory, 'failures.json');
+const partialPath = resolve(failureDirectory, 'partial-sense-content.json');
 const lockPath = resolve(failureDirectory, 'generation.lock');
 const validBankIds = new Set(['gaokao', 'cet4', 'cet6', 'ielts', 'toefl']);
 
@@ -26,9 +28,9 @@ let execute = false;
 let force = false;
 let jsonEvents = false;
 let limit = Number.POSITIVE_INFINITY;
-let qualityMode = 'unreviewed';
 let retries = 1;
 let onlyWordIds = null;
+let onlySenseIds = null;
 
 for (let index = 0; index < args.length; index += 1) {
   const argument = args[index];
@@ -38,10 +40,11 @@ for (let index = 0; index < args.length; index += 1) {
   else if (argument === '--force') force = true;
   else if (argument === '--json-events') jsonEvents = true;
   else if (argument === '--limit') limit = Number(args[index += 1]);
-  else if (argument === '--quality-mode') qualityMode = args[index += 1] ?? '';
   else if (argument === '--retries') retries = Number(args[index += 1]);
   else if (argument === '--only') {
     onlyWordIds = new Set((args[index += 1] ?? '').split(',').map((id) => id.trim()).filter(Boolean));
+  } else if (argument === '--sense') {
+    onlySenseIds = new Set((args[index += 1] ?? '').split(',').map((id) => id.trim()).filter(Boolean));
   } else if (argument === '--output') outputRoot = resolve(projectRoot, args[index += 1] ?? '');
   else {
     throw new Error(`Unknown argument: ${argument}`);
@@ -65,9 +68,6 @@ if ((!Number.isFinite(limit) && limit !== Number.POSITIVE_INFINITY) || limit < 0
 if (!Number.isInteger(retries) || retries < 0 || retries > 8) {
   throw new Error('--retries must be an integer from 0 to 8');
 }
-if (!['unreviewed', 'balanced', 'strict'].includes(qualityMode)) {
-  throw new Error('--quality-mode must be unreviewed, balanced, or strict');
-}
 const requestedBanks = bankOption === 'all'
   ? [...validBankIds]
   : bankOption.split(',').map((id) => id.trim()).filter(Boolean);
@@ -76,6 +76,10 @@ if (requestedBanks.length === 0 || requestedBanks.some((id) => !validBankIds.has
 }
 
 const bankManifest = JSON.parse(await readFile(resolve(examBankDirectory, 'manifest.json'), 'utf8'));
+const lexicon = JSON.parse(await readFile(lexiconPath, 'utf8'));
+if (lexicon.schemaVersion !== 3) {
+  throw new Error('Canonical Oxford lexicon is incompatible.');
+}
 const allWords = new Map();
 const entriesByBank = new Map();
 const targetWordIds = new Set();
@@ -159,23 +163,19 @@ try {
   const journey = await vite.ssrLoadModule('/src/domain/journey.ts');
   const {
     WORD_COACH_PROMPT_VERSION,
-    WORD_COACH_REVIEW_VERSION,
     WORD_COACH_SCHEMA_VERSION,
     WORD_COACH_SHARD_COUNT,
     assessWordCoachQuality,
-    wordCoachContentHash,
-    wordCoachRecordHasSourceConflict,
-    wordCoachRequiresSemanticReview,
     wordCoachShardId,
     wordCoachSourceHash,
   } = coachContract;
   const {
-    evaluateWordExplanation,
     explainWord,
     isAiConfigured,
+    PartialWordExplanationError,
     parseStoredWordExplanation,
   } = aiClient;
-  const { parseDefinitionSenses } = wordText;
+  const { parseDefinitionSenses, parseWordSenses } = wordText;
   const { orderWordsByJourney } = journey;
 
   const orderedTargetIds = [];
@@ -201,6 +201,10 @@ try {
     }
     shards.set(filename.slice(0, 2), value.records);
   }
+  const partialDocument = JSON.parse(
+    await readFile(partialPath, 'utf8').catch(() => '{"records":{}}'),
+  );
+  const partialRecords = partialDocument.records ?? {};
 
   function recordFor(word) {
     return shards.get(wordCoachShardId(word.id))?.[word.id];
@@ -213,7 +217,7 @@ try {
     try {
       return parseStoredWordExplanation(
         record,
-        parseDefinitionSenses(word.definitionZh).length,
+        parseWordSenses(word),
         word.word,
       );
     } catch {
@@ -229,49 +233,32 @@ try {
     ).some((issue) => issue.severity === 'error');
   }
 
-  function currentReview(record, explanation) {
-    const review = record?.qualityReview;
-    return review
-      && review.reviewVersion === WORD_COACH_REVIEW_VERSION
-      && review.contentHash === wordCoachContentHash(explanation)
-      ? review
-      : null;
-  }
-
   function recordIsCurrent(word, record) {
     const explanation = explanationFor(word, record);
     if (!explanation || !passesDeterministicQuality(word, explanation)) return false;
-    const review = currentReview(record, explanation);
-    if (review?.verdict === 'fail') return false;
-    return !wordCoachRequiresSemanticReview(word, qualityMode) || Boolean(review);
+    return true;
+  }
+
+  const staleShardIds = new Set();
+  for (const [shardId, records] of shards) {
+    for (const [wordId, record] of Object.entries(records)) {
+      const word = allWords.get(wordId);
+      if (word && recordIsCurrent(word, record)) continue;
+      delete records[wordId];
+      staleShardIds.add(shardId);
+    }
+  }
+  for (const [wordId, partial] of Object.entries(partialRecords)) {
+    const word = allWords.get(wordId);
+    if (word
+      && partial.promptVersion === WORD_COACH_PROMPT_VERSION
+      && partial.sourceHash === wordCoachSourceHash(word)) continue;
+    delete partialRecords[wordId];
   }
 
   const pending = targetWords
-    .filter((word) => {
-      const record = recordFor(word);
-      if (wordCoachRecordHasSourceConflict(word, record)) return false;
-      const explanation = explanationFor(word, record);
-      if (!force && explanation && currentReview(record, explanation)?.verdict === 'fail') {
-        return false;
-      }
-      return force || !recordIsCurrent(word, record);
-    })
+    .filter((word) => force || onlySenseIds || !recordIsCurrent(word, recordFor(word)))
     .slice(0, limit);
-  const blocked = targetWords.filter((word) => {
-    const record = recordFor(word);
-    return Boolean(record && wordCoachRecordHasSourceConflict(word, record));
-  }).length;
-  const rejected = targetWords.filter((word) => {
-    const record = recordFor(word);
-    const explanation = explanationFor(word, record);
-    const review = explanation ? currentReview(record, explanation) : null;
-    return Boolean(review?.verdict === 'fail' && !wordCoachRecordHasSourceConflict(word, record));
-  }).length;
-  const pendingReview = pending.filter((word) => (
-    !force
-    && wordCoachRequiresSemanticReview(word, qualityMode)
-    && Boolean(explanationFor(word, recordFor(word)))
-  )).length;
   const alreadyCurrent = targetWords.length - targetWords.filter((word) => (
     !recordIsCurrent(word, recordFor(word))
   )).length;
@@ -282,25 +269,23 @@ try {
     uniqueCorpusWords: allWords.size,
     targetWords: targetWords.length,
     alreadyCurrent,
-    blocked,
-    rejected,
     pending: pending.length,
-    pendingGeneration: pending.length - pendingReview,
-    pendingReview,
+    pendingGeneration: pending.length,
     totalSenseExamples: pending.reduce((sum, word) => (
       sum
       + parseDefinitionSenses(word.definitionZh).length
     ), 0),
     shardCount: WORD_COACH_SHARD_COUNT,
     promptVersion: WORD_COACH_PROMPT_VERSION,
-    qualityMode,
+    lexiconSchemaVersion: lexicon.schemaVersion,
+    dictionarySource: lexicon.source.bundleIdentifier,
     ordering: 'journey-level',
     nextWordIds: pending.slice(0, 10).map((word) => word.id),
     outputRoot,
   };
   emit('plan', plan, JSON.stringify(plan, null, 2));
 
-  if (!execute || pending.length === 0) process.exitCode = 0;
+  if (!execute || (pending.length === 0 && staleShardIds.size === 0)) process.exitCode = 0;
   else {
     const config = {
       endpoint: process.env.WORDBUDDY_AI_ENDPOINT ?? '',
@@ -321,29 +306,99 @@ try {
     const failures = [];
     let completed = 0;
 
-    async function generateWithRetry(word) {
+    async function generateWithRetry(word, laneId, queuePosition) {
       let lastError;
       const startedAt = Date.now();
-      const existingRecord = recordFor(word);
-      let reusableExplanation = force ? null : explanationFor(word, existingRecord);
-      if (reusableExplanation && !passesDeterministicQuality(word, reusableExplanation)) {
-        reusableExplanation = null;
+      const senses = parseWordSenses(word);
+      const availableSenseIds = new Set(senses.map((sense) => sense.id));
+      if (onlySenseIds && [...onlySenseIds].some((senseId) => !availableSenseIds.has(senseId))) {
+        throw new Error('Requested sense ID is not part of the target word.');
       }
+      const sourceHash = wordCoachSourceHash(word);
+      const savedPartial = partialRecords[word.id];
+      const publishedContent = explanationFor(word, recordFor(word))?.senseContent ?? {};
+      const partialContent = savedPartial?.promptVersion === WORD_COACH_PROMPT_VERSION
+        && savedPartial.sourceHash === sourceHash
+        ? savedPartial.senseContent
+        : {};
+      const accumulated = { ...publishedContent, ...partialContent };
+      onlySenseIds?.forEach((senseId) => { delete accumulated[senseId]; });
+      const unresolvedSenseIds = () => senses
+        .map((sense) => sense.id)
+        .filter((senseId) => !accumulated[senseId]);
+      const requestedUnresolvedSenseIds = () => onlySenseIds
+        ? [...onlySenseIds].filter((senseId) => !accumulated[senseId])
+        : unresolvedSenseIds();
+      let remainingSenseIds = requestedUnresolvedSenseIds();
+
+      if (remainingSenseIds.length === 0) {
+        const explanation = parseStoredWordExplanation(
+          { senseContent: accumulated },
+          senses,
+          word.word,
+        );
+        const qualityIssues = assessWordCoachQuality(word, explanation, config.outputLanguage);
+        const hardErrors = qualityIssues.filter((issue) => issue.severity === 'error');
+        if (hardErrors.length === 0) {
+          delete partialRecords[word.id];
+          return {
+            explanation,
+            qualityWarnings: qualityIssues.filter((issue) => issue.severity === 'warning'),
+            attempts: 0,
+            durationMs: Date.now() - startedAt,
+            phase: 'generate',
+          };
+        }
+        remainingSenseIds = senses.map((sense) => sense.id);
+        remainingSenseIds.forEach((senseId) => { delete accumulated[senseId]; });
+      }
+
       for (let attempt = 0; attempt <= retries; attempt += 1) {
-        const phase = reusableExplanation ? 'review' : 'generate';
         emit('word-start', {
           wordId: word.id,
           word: word.word,
-          phase,
+          laneId,
+          queuePosition,
+          phase: 'generate',
           attempt: attempt + 1,
           maxAttempts: retries + 1,
+          senseIds: remainingSenseIds,
         });
         try {
-          let explanation = reusableExplanation ?? await explainWord(config, word, {
+          const generated = await explainWord(config, word, {
             repairFeedback: lastError
               ? lastError instanceof Error ? lastError.message : String(lastError)
               : undefined,
+            lexicalSenses: lexicon.words[word.id]?.senses ?? [],
+            senseIds: remainingSenseIds,
           });
+          Object.assign(accumulated, generated.senseContent);
+          remainingSenseIds = requestedUnresolvedSenseIds();
+          if (remainingSenseIds.length > 0) {
+            throw new Error(`AI 未返回 ${remainingSenseIds[0]} 的学习内容。`);
+          }
+          const unresolved = unresolvedSenseIds();
+          if (onlySenseIds && unresolved.length > 0) {
+            partialRecords[word.id] = {
+              promptVersion: WORD_COACH_PROMPT_VERSION,
+              sourceHash,
+              senseContent: accumulated,
+              failedSenseIds: unresolved,
+              updatedAt: new Date().toISOString(),
+            };
+            return {
+              partialOnly: true,
+              senseIds: [...onlySenseIds],
+              attempts: attempt + 1,
+              durationMs: Date.now() - startedAt,
+              phase: 'generate',
+            };
+          }
+          const explanation = parseStoredWordExplanation(
+            { senseContent: accumulated },
+            senses,
+            word.word,
+          );
           const qualityIssues = assessWordCoachQuality(
             word,
             explanation,
@@ -351,38 +406,38 @@ try {
           );
           const hardErrors = qualityIssues.filter((issue) => issue.severity === 'error');
           if (hardErrors.length > 0) {
-            explanation = null;
-            reusableExplanation = null;
+            const failedIndexes = hardErrors.flatMap((issue) => {
+              const match = issue.code.match(/-(\d+)$/);
+              return match ? [Number(match[1])] : [];
+            });
+            remainingSenseIds = failedIndexes.length > 0
+              ? failedIndexes.map((index) => senses[index]?.id).filter(Boolean)
+              : senses.map((sense) => sense.id);
+            remainingSenseIds.forEach((senseId) => { delete accumulated[senseId]; });
             throw new Error(hardErrors.map((issue) => issue.message).join(' '));
           }
-          reusableExplanation = explanation;
-          const semanticReview = wordCoachRequiresSemanticReview(word, qualityMode)
-            ? await evaluateWordExplanation(config, word, explanation)
-            : null;
+          delete partialRecords[word.id];
           return {
             explanation,
-            semanticReview,
-            qualityWarnings: [
-              ...qualityIssues.filter((issue) => issue.severity === 'warning'),
-              ...(semanticReview?.issues ?? []).filter((issue) => issue.severity === 'warning'),
-            ],
+            qualityWarnings: qualityIssues.filter((issue) => issue.severity === 'warning'),
             attempts: attempt + 1,
             durationMs: Date.now() - startedAt,
-            phase,
-            blocked: semanticReview?.verdict === 'fail',
-            blockKind: semanticReview
-              ? semanticReview.issues.some((issue) => issue.code === 'source_conflict')
-                ? 'source-conflict'
-                : 'review-failed'
-              : null,
+            phase: 'generate',
           };
         } catch (error) {
           lastError = error;
+          if (error instanceof PartialWordExplanationError) {
+            Object.assign(accumulated, error.partialSenseContent);
+            remainingSenseIds = requestedUnresolvedSenseIds();
+          }
           if (attempt < retries) {
             emit('word-retry', {
               wordId: word.id,
               word: word.word,
+              laneId,
+              queuePosition,
               attempt: attempt + 1,
+              senseIds: remainingSenseIds,
               message: error instanceof Error ? error.message : String(error),
             });
             await new Promise((resolveDelay) => {
@@ -391,15 +446,25 @@ try {
           }
         }
       }
-      throw lastError;
+      const terminalError = new Error(
+        lastError instanceof Error ? lastError.message : String(lastError),
+      );
+      terminalError.partialSenseContent = accumulated;
+      terminalError.failedSenseIds = remainingSenseIds;
+      throw terminalError;
     }
 
     async function writeShard(shardId) {
       const records = shards.get(shardId) ?? {};
+      const destination = resolve(shardDirectory, `${shardId}.json`);
+      if (Object.keys(records).length === 0) {
+        shards.delete(shardId);
+        await rm(destination, { force: true });
+        return;
+      }
       const sorted = Object.fromEntries(
         Object.entries(records).sort(([left], [right]) => left.localeCompare(right, 'en')),
       );
-      const destination = resolve(shardDirectory, `${shardId}.json`);
       const temporary = `${destination}.${process.pid}.tmp`;
       await writeFile(temporary, JSON.stringify({
         schemaVersion: WORD_COACH_SCHEMA_VERSION,
@@ -408,17 +473,68 @@ try {
       await rename(temporary, destination);
     }
 
+    async function writeJsonAtomic(destination, value, pretty = false) {
+      const temporary = `${destination}.${process.pid}.tmp`;
+      const serialized = pretty ? `${JSON.stringify(value, null, 2)}\n` : JSON.stringify(value);
+      await writeFile(temporary, serialized, 'utf8');
+      await rename(temporary, destination);
+    }
+
+    async function writeCheckpoint() {
+      const generatedCount = [...allWords.values()].filter((word) => (
+        recordIsCurrent(word, recordFor(word))
+      )).length;
+      await mkdir(failureDirectory, { recursive: true });
+      await Promise.all([
+        writeJsonAtomic(resolve(outputRoot, 'manifest.json'), {
+          schemaVersion: WORD_COACH_SCHEMA_VERSION,
+          promptVersion: WORD_COACH_PROMPT_VERSION,
+          shardCount: WORD_COACH_SHARD_COUNT,
+          lexiconSchemaVersion: lexicon.schemaVersion,
+          dictionarySource: {
+            bundleIdentifier: lexicon.source.bundleIdentifier,
+            bundleVersion: lexicon.source.bundleVersion,
+            contentCopyright: lexicon.source.contentCopyright,
+          },
+          outputLanguage: config.outputLanguage,
+          model: config.model,
+          generatedAt: new Date().toISOString(),
+          uniqueWordCount: allWords.size,
+          generatedCount,
+          complete: generatedCount === allWords.size,
+        }, true),
+        writeJsonAtomic(failurePath, failures, true),
+        writeJsonAtomic(partialPath, { version: 1, records: partialRecords }, true),
+      ]);
+      return { generatedCount };
+    }
+
+    await Promise.all([...staleShardIds].map(writeShard));
+    await writeCheckpoint();
     for (let offset = 0; offset < pending.length; offset += concurrency) {
       const batch = pending.slice(offset, offset + concurrency);
-      const results = await Promise.allSettled(batch.map(generateWithRetry));
+      const results = await Promise.allSettled(batch.map((word, laneId) => (
+        generateWithRetry(word, laneId, offset + laneId)
+      )));
       const dirtyShards = new Set();
       const completedEvents = [];
-      const blockedEvents = [];
+      const partialCompletedEvents = [];
       const failedEvents = [];
 
       results.forEach((result, index) => {
         const word = batch[index];
+        const laneId = index;
+        const queuePosition = offset + index;
         if (result.status === 'rejected') {
+          if (result.reason?.partialSenseContent) {
+            partialRecords[word.id] = {
+              promptVersion: WORD_COACH_PROMPT_VERSION,
+              sourceHash: wordCoachSourceHash(word),
+              senseContent: result.reason.partialSenseContent,
+              failedSenseIds: result.reason.failedSenseIds ?? [],
+              updatedAt: new Date().toISOString(),
+            };
+          }
           failures.push({
             wordId: word.id,
             message: result.reason instanceof Error ? result.reason.message : String(result.reason),
@@ -426,7 +542,21 @@ try {
           failedEvents.push({
             wordId: word.id,
             word: word.word,
+            laneId,
+            queuePosition,
             message: result.reason instanceof Error ? result.reason.message : String(result.reason),
+          });
+          return;
+        }
+        if (result.value.partialOnly) {
+          partialCompletedEvents.push({
+            wordId: word.id,
+            word: word.word,
+            laneId,
+            queuePosition,
+            senseIds: result.value.senseIds,
+            attempts: result.value.attempts,
+            durationMs: result.value.durationMs,
           });
           return;
         }
@@ -437,47 +567,43 @@ try {
           sourceHash: wordCoachSourceHash(word),
           coachMarkdown: result.value.explanation.markdown,
           senseExamples: result.value.explanation.senseExamples,
-          ...(result.value.semanticReview ? {
-            qualityReview: {
-              reviewVersion: WORD_COACH_REVIEW_VERSION,
-              contentHash: wordCoachContentHash(result.value.explanation),
-              verdict: result.value.semanticReview.verdict,
-              issues: result.value.semanticReview.issues,
-              model: config.model,
-              reviewedAt: new Date().toISOString(),
-            },
-          } : {}),
+          senseContent: result.value.explanation.senseContent,
         };
         shards.set(shardId, records);
         dirtyShards.add(shardId);
         const event = {
           wordId: word.id,
           word: word.word,
+          laneId,
+          queuePosition,
           shardId,
           attempts: result.value.attempts,
           durationMs: result.value.durationMs,
           qualityWarnings: result.value.qualityWarnings,
           senseCount: result.value.explanation.senseExamples.length,
           phase: result.value.phase,
-          semanticIssues: result.value.semanticReview?.issues ?? [],
-          blockKind: result.value.blockKind,
         };
-        if (result.value.blocked) blockedEvents.push(event);
-        else {
-          completed += 1;
-          completedEvents.push(event);
-        }
+        completed += 1;
+        completedEvents.push(event);
       });
 
+      completedEvents.forEach((event) => emit('word-writing', {
+        wordId: event.wordId,
+        word: event.word,
+        laneId: event.laneId,
+        queuePosition: event.queuePosition,
+        phase: 'write',
+      }));
       await Promise.all([...dirtyShards].map(writeShard));
+      await writeCheckpoint();
       completedEvents.forEach((event) => emit('word-complete', event));
-      blockedEvents.forEach((event) => emit('word-blocked', event));
+      partialCompletedEvents.forEach((event) => emit('word-partial-complete', event));
       failedEvents.forEach((event) => emit('word-failed', event));
       const progress = {
         processed: Math.min(offset + batch.length, pending.length),
         pending: pending.length,
         saved: completed,
-        blocked: blockedEvents.length,
+        blocked: 0,
         failed: failures.length,
       };
       emit(
@@ -487,40 +613,12 @@ try {
       );
     }
 
-    const generatedCount = [...allWords.values()].filter((word) => (
-      recordIsCurrent(word, recordFor(word))
-    )).length;
-    const sourceConflictCount = [...allWords.values()].filter((word) => (
-      wordCoachRecordHasSourceConflict(word, recordFor(word))
-    )).length;
-    await writeFile(resolve(outputRoot, 'manifest.json'), `${JSON.stringify({
-      schemaVersion: WORD_COACH_SCHEMA_VERSION,
-      promptVersion: WORD_COACH_PROMPT_VERSION,
-      shardCount: WORD_COACH_SHARD_COUNT,
-      dictionaryCommit: bankManifest.source.commit,
-      outputLanguage: config.outputLanguage,
-      model: config.model,
-      qualityMode,
-      generatedAt: new Date().toISOString(),
-      uniqueWordCount: allWords.size,
-      generatedCount,
-      blockedCount: sourceConflictCount,
-      rejectedCount: [...allWords.values()].filter((word) => {
-        const record = recordFor(word);
-        const explanation = explanationFor(word, record);
-        const review = explanation ? currentReview(record, explanation) : null;
-        return Boolean(review?.verdict === 'fail' && !wordCoachRecordHasSourceConflict(word, record));
-      }).length,
-      complete: generatedCount === allWords.size,
-    }, null, 2)}\n`, 'utf8');
-
-    await mkdir(failureDirectory, { recursive: true });
-    await writeFile(failurePath, `${JSON.stringify(failures, null, 2)}\n`, 'utf8');
+    const { generatedCount } = await writeCheckpoint();
     emit('complete', {
       generatedCount,
       corpusWordCount: allWords.size,
       failureCount: failures.length,
-      blockedCount: sourceConflictCount,
+      blockedCount: 0,
     }, `Corpus coverage: ${generatedCount}/${allWords.size}. Failures: ${failures.length}.`);
     if (failures.length > 0) process.exitCode = 1;
   }

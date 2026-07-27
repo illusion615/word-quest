@@ -23,9 +23,10 @@ import type {
   WordEntry,
   WordProgress,
   WordSenseExample,
+  WordSenseLearningContent,
 } from '../domain/models';
 import { parseWordCoachSections } from '../domain/wordCoach';
-import { parseDefinitionSenses } from '../domain/wordText';
+import { parseDefinitionSenses, parseWordSenses } from '../domain/wordText';
 import { SenseList } from './WordDefinitions';
 
 const MarkdownContent = lazy(() => import('./MarkdownContent'));
@@ -58,9 +59,48 @@ interface GroupedCoachContentProps {
   word: WordEntry;
   markdown: string;
   examples: WordSenseExample[];
+  senseContent?: Record<string, WordSenseLearningContent>;
 }
 
-export function GroupedCoachContent({ word, markdown, examples }: GroupedCoachContentProps) {
+export function GroupedCoachContent({ word, markdown, examples, senseContent }: GroupedCoachContentProps) {
+  const identifiedSenses = parseWordSenses(word);
+  if (senseContent && identifiedSenses.every((sense) => senseContent[sense.id])) {
+    return (
+      <div className="word-coach-content">
+        <section className="word-coach-sense-stack" aria-labelledby={`word-coach-content-${word.id}-senses`}>
+          <div className="word-coach-section-heading">
+            <h4 id={`word-coach-content-${word.id}-senses`}><BookOpenCheck aria-hidden="true" /> 逐义学习</h4>
+            <span>{identifiedSenses.length} 个义项</span>
+          </div>
+          <ol>
+            {identifiedSenses.map((sense, senseIndex) => {
+              const content = senseContent[sense.id];
+              return (
+                <li key={sense.id}>
+                  <div className="word-coach-sense-title">
+                    <span>{String(senseIndex + 1).padStart(2, '0')}</span>
+                    <div>
+                      {sense.label && <b>{sense.label}</b>}
+                      <strong>{sense.text}</strong>
+                    </div>
+                  </div>
+                  <p className="word-coach-distinction"><b>助记：</b>{content.mnemonic}</p>
+                  <div className="word-coach-pattern">
+                    <span>使用技巧</span>
+                    <p>{content.usageTip}</p>
+                  </div>
+                  <blockquote className="word-coach-example">
+                    <p lang="en">{content.example}</p>
+                    <footer>{content.translation}</footer>
+                  </blockquote>
+                </li>
+              );
+            })}
+          </ol>
+        </section>
+      </div>
+    );
+  }
   const senses = parseDefinitionSenses(word.definitionZh);
   const sections = parseWordCoachSections(markdown, senses.length);
   const sectionIdPrefix = `word-coach-content-${word.id}`;
@@ -250,6 +290,7 @@ export function InlineQuestionReview({
                 word={word}
                 markdown={currentCoach.text}
                 examples={currentCoach.senseExamples}
+                senseContent={currentCoach.senseContent}
               />
             </Suspense>
           )}

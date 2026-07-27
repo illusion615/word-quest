@@ -5,6 +5,7 @@ import {
   Crown,
   EyeOff,
   Hash,
+  CircleHelp,
   Layers3,
   ListChecks,
   Zap,
@@ -33,6 +34,7 @@ interface ChallengePrepProps {
   onChoose: (boostId: BoostId) => void;
   onContinue: () => void;
   onExit: () => void;
+  onOpenHelp: () => void;
 }
 
 const BOOST_ICONS: Record<BoostId, typeof Zap> = {
@@ -53,15 +55,22 @@ export function ChallengePrep({
   onChoose,
   onContinue,
   onExit,
+  onOpenHelp,
 }: ChallengePrepProps) {
   const owned = BOOST_DEFS.filter((def) => boostStacks(activeBoosts, def.id) > 0);
 
   return (
     <main className="skill-draft-page page-width">
-      <button type="button" className="icon-text-button" onClick={onExit} aria-label="退出挑战">
-        <ArrowLeft aria-hidden="true" />
-        <span>退出</span>
-      </button>
+      <div className="skill-draft-toolbar">
+        <button type="button" className="icon-text-button" onClick={onExit} aria-label="退出挑战">
+          <ArrowLeft aria-hidden="true" />
+          <span>退出</span>
+        </button>
+        <button type="button" className="icon-text-button" onClick={onOpenHelp} aria-label="打开新手指引">
+          <CircleHelp aria-hidden="true" />
+          <span>玩法帮助</span>
+        </button>
+      </div>
       <section className="skill-draft-panel" aria-labelledby="challenge-prep-heading">
         <p className="eyebrow">第 {levelNumber} 关 · {levelKind === 'boss' ? 'Boss 决战' : '战前整备'}</p>
         <h1 id="challenge-prep-heading">不够卷，再强一点</h1>

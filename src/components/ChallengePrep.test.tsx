@@ -23,6 +23,7 @@ function renderPrep(activeBoosts: ActiveBoosts, offers = BOOST_DEFS.slice(0, 3))
       onChoose={() => undefined}
       onContinue={() => undefined}
       onExit={() => undefined}
+      onOpenHelp={() => undefined}
     />,
   );
 }
@@ -56,6 +57,7 @@ describe('ChallengePrep', () => {
         onChoose={() => undefined}
         onContinue={() => undefined}
         onExit={() => undefined}
+        onOpenHelp={() => undefined}
       />,
     );
 

@@ -4,8 +4,6 @@ import type { WordExplanation } from './models';
 import {
   assessWordCoachQuality,
   parseWordCoachSections,
-  wordCoachRecordHasSourceConflict,
-  wordCoachRequiresSemanticReview,
   wordCoachSourceHash,
 } from './wordCoach';
 
@@ -34,6 +32,11 @@ const valid: WordExplanation = {
 };
 
 describe('word coach quality assessment', () => {
+  it('invalidates learning content when stable sense identity changes', () => {
+    expect(wordCoachSourceHash({ ...word, senseIds: ['achieve:s0', 'achieve:s1'] }))
+      .not.toBe(wordCoachSourceHash({ ...word, senseIds: ['achieve:s1', 'achieve:s0'] }));
+  });
+
   it('accepts a structurally complete coach without warnings', () => {
     expect(assessWordCoachQuality(word, valid)).toEqual([]);
   });
@@ -85,65 +88,5 @@ describe('word coach display sections', () => {
 
   it('returns null when a legacy coach cannot be grouped safely', () => {
     expect(parseWordCoachSections('### 只有一段\n\n自由文本', 1)).toBeNull();
-  });
-});
-
-describe('word coach semantic review policy', () => {
-  it('skips semantic review in unreviewed mode and requires it in strict mode', () => {
-    expect(wordCoachRequiresSemanticReview(word, 'unreviewed')).toBe(false);
-    expect(wordCoachRequiresSemanticReview(word, 'strict')).toBe(true);
-  });
-
-  it('reviews only polysemous or source-risk words in balanced mode', () => {
-    expect(wordCoachRequiresSemanticReview(word, 'balanced')).toBe(false);
-    expect(wordCoachRequiresSemanticReview({
-      ...word,
-      definitionZh: 'n. 第一义；第二义；第三义；第四义；第五义',
-    }, 'balanced')).toBe(true);
-    expect(wordCoachRequiresSemanticReview({
-      ...word,
-      id: 'vcd',
-      word: 'vcd',
-      definitionZh: '[电] 可变电容二极体',
-    }, 'balanced')).toBe(true);
-    expect(wordCoachRequiresSemanticReview({
-      ...word,
-      definitionZh: 'a. 无电线的, 交直流两用的',
-    }, 'balanced')).toBe(true);
-    expect(wordCoachRequiresSemanticReview({
-      ...word,
-      definitionZh: '[计算机] 普通长单词的技术义项',
-    }, 'balanced')).toBe(false);
-  });
-});
-
-describe('word coach source conflicts', () => {
-  it('keeps a source conflict blocked across prompt revisions until the source changes', () => {
-    const sourceHash = wordCoachSourceHash(word);
-    const record = {
-      promptVersion: 1,
-      sourceHash,
-      coachMarkdown: valid.markdown,
-      senseExamples: valid.senseExamples,
-      qualityReview: {
-        reviewVersion: 1,
-        contentHash: 'old-content',
-        verdict: 'fail' as const,
-        issues: [{
-          severity: 'error' as const,
-          code: 'source_conflict' as const,
-          senseIndex: 0,
-          message: '源词典义项有误。',
-        }],
-        model: 'reviewer',
-        reviewedAt: '2026-07-24T00:00:00.000Z',
-      },
-    };
-
-    expect(wordCoachRecordHasSourceConflict(word, record)).toBe(true);
-    expect(wordCoachRecordHasSourceConflict({
-      ...word,
-      definitionZh: `${word.definitionZh}；修订义项`,
-    }, record)).toBe(false);
   });
 });
