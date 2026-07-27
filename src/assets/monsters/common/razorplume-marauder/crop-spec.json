@@ -1,6 +1,0 @@
-{
-  "aloof": { "x": 60, "y": 0, "width": 370, "height": 512 },
-  "challenge": { "x": 430, "y": 0, "width": 594, "height": 512 },
-  "vanquished": { "x": 0, "y": 512, "width": 512, "height": 512 },
-  "triumphant": { "x": 512, "y": 512, "width": 512, "height": 512 }
-}

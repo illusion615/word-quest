@@ -6,10 +6,10 @@ import gruntAttack from '../assets/monsters/grunt/attack.webp';
 import gruntDefeated from '../assets/monsters/grunt/defeated.webp';
 import gruntHurt from '../assets/monsters/grunt/hurt.webp';
 import gruntIdle from '../assets/monsters/grunt/idle.webp';
-import cloudtailAloof from '../assets/monsters/common/cloudtail-coral/aloof.webp';
-import cloudtailChallenge from '../assets/monsters/common/cloudtail-coral/challenge.webp';
-import cloudtailTriumphant from '../assets/monsters/common/cloudtail-coral/triumphant.webp';
-import cloudtailVanquished from '../assets/monsters/common/cloudtail-coral/vanquished.webp';
+import silkwindAloof from '../assets/monsters/common/silkwind-quill-marten/aloof.webp';
+import silkwindChallenge from '../assets/monsters/common/silkwind-quill-marten/challenge.webp';
+import silkwindTriumphant from '../assets/monsters/common/silkwind-quill-marten/triumphant.webp';
+import silkwindVanquished from '../assets/monsters/common/silkwind-quill-marten/vanquished.webp';
 import razorplumeAloof from '../assets/monsters/common/razorplume-marauder/aloof.webp';
 import razorplumeChallenge from '../assets/monsters/common/razorplume-marauder/challenge.webp';
 import razorplumeTriumphant from '../assets/monsters/common/razorplume-marauder/triumphant.webp';
@@ -56,13 +56,13 @@ const ROSTER_CHARACTERS_BY_TIER: Partial<
 > = {
   common: [
     {
-      id: 'cloudtail-coral',
-      name: '云尾兽',
+      id: 'silkwind-quill-marten',
+      name: '绡风翎貂',
       frames: {
-        aloof: cloudtailAloof,
-        challenge: cloudtailChallenge,
-        vanquished: cloudtailVanquished,
-        triumphant: cloudtailTriumphant,
+        aloof: silkwindAloof,
+        challenge: silkwindChallenge,
+        vanquished: silkwindVanquished,
+        triumphant: silkwindTriumphant,
       },
     },
     {

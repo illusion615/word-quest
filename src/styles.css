@@ -2798,6 +2798,8 @@ html[data-theme="dark"] .battle-header {
   bottom: clamp(10px, 2.6vh, 26px);
   width: var(--wheel-size);
   margin-left: calc(var(--wheel-size) * -0.5);
+  --artwork-offset-y: 0px;
+  --artwork-scale: 1;
   --tier-scale: 1;
   --status-opacity: 1;
   transform-origin: center bottom;
@@ -2892,6 +2894,8 @@ html[data-theme="dark"] .battle-header {
   background: transparent;
   pointer-events: auto;
   cursor: pointer;
+  transform: translateY(var(--artwork-offset-y)) scale(var(--artwork-scale));
+  transform-origin: center bottom;
 }
 
 .roster-monster-speak:disabled {
@@ -2929,8 +2933,13 @@ html[data-theme="dark"] .battle-header {
 
 /* The focus monster leans forward, reads brightest, and drives the idle bob. */
 .roster-monster.is-focus {
+  --artwork-scale: 1.35;
   --focus-boost: 1.12;
   --status-opacity: 1;
+}
+
+.roster-monster.is-focus .monster-dialogue {
+  bottom: calc(135% + 2px);
 }
 .roster-monster.is-active.pose-aloof img { animation: monster-idle 1.6s ease-in-out infinite; }
 .roster-monster.is-active.pose-challenge img {
@@ -7198,6 +7207,7 @@ html[data-theme="dark"] .battle-header {
   }
 
   .battle-scene.is-asking .roster-monster.is-focus {
+    --artwork-offset-y: 28px;
     --focus-boost: 1.5;
   }
 
@@ -7217,6 +7227,16 @@ html[data-theme="dark"] .battle-header {
     max-width: min(142px, 42vw);
     padding: 7px 9px;
     font-size: 11px;
+  }
+
+  .battle-scene.is-asking .roster-monster.is-focus .monster-dialogue {
+    bottom: calc(112% + 14px);
+    max-width: min(190px, 70vw);
+    padding: 6px 9px;
+  }
+
+  .battle-scene.is-asking .roster-monster.is-focus[data-monster-character="silkwind-quill-marten"] .monster-dialogue {
+    bottom: calc(134% + 2px);
   }
 
   .battle-scene.is-preview .battle-context-panel {

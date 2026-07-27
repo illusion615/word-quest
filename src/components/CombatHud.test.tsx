@@ -65,7 +65,7 @@ describe('combat monster artwork', () => {
     );
 
     expect(characterIds).toEqual(new Set([
-      'cloudtail-coral',
+      'silkwind-quill-marten',
       'razorplume-marauder',
       'inkveil-duelist',
     ]));

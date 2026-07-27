@@ -41,13 +41,13 @@ aloof       | challenge
 vanquished  | triumphant
 ```
 
-优先让四格保留透明间隔。为了保证动作表现，武器、尾羽等可以越过几何中线，但四个主体
+优先让四态保留透明间隔。为了保证动作表现，武器、尾羽等可以越过几何中线，但四个主体
 必须保持不相连，确保可以按透明像素边界分离。标准四格切分与 WebP 压缩使用：
 
 ```bash
 npm run assets:slice-monster -- \
-  src/assets/monsters/cloudtail-common-sheet.png \
-  src/assets/monsters/common/cloudtail-coral
+  src/assets/monsters/<monster>-sheet.png \
+  src/assets/monsters/common/<monster>
 ```
 
 脚本固定输出 512x512 的四张 WebP，并保留母版中的相对缩放、悬浮高度和动作位移。
@@ -67,9 +67,9 @@ npm run assets:slice-monster -- \
 
 ```bash
 npm run assets:slice-monster -- \
-  --crop-spec src/assets/monsters/common/razorplume-marauder/crop-spec.json \
-  "src/assets/monsters/Designer (17).png" \
-  src/assets/monsters/common/razorplume-marauder
+  --crop-spec src/assets/monsters/common/<monster>/crop-spec.json \
+  src/assets/monsters/<monster>-sheet.png \
+  src/assets/monsters/common/<monster>
 ```
 
 自定义裁区会等比缩放进透明 512x512 画布，不压扁角色、不裁武器，也不要求四态强行同高。
@@ -92,9 +92,9 @@ npm run assets:slice-monster -- \
 
 ```bash
 npm run assets:slice-monster -- \
-  --mask-spec src/assets/monsters/common/inkveil-duelist/mask-spec.json \
-  src/assets/monsters/inkveil-common-sheet.png \
-  src/assets/monsters/common/inkveil-duelist
+  --mask-spec src/assets/monsters/common/silkwind-quill-marten/mask-spec.json \
+  src/assets/monsters/silkwind-common-sheet.png \
+  src/assets/monsters/common/silkwind-quill-marten
 ```
 
 蒙版模式以四个最大透明连通域作为主体，用曲线边界完整保留交错的武器和触腕；独立墨滴、
@@ -105,7 +105,7 @@ npm run assets:slice-monster -- \
 ## 难度分级 → 目录 → 视觉建议
 
 四档常规怪 + 一档波次首领。每个普通怪变体使用独立子目录，例如
-`common/cloudtail-coral/`。现有 `grunt/` 是旧版兼容素材。
+`common/silkwind-quill-marten/`。现有 `grunt/` 是旧版兼容素材。
 
 | 档位 | 目录 | 对应单词 | 体型/配色建议 |
 | --- | --- | --- | --- |
@@ -120,7 +120,7 @@ npm run assets:slice-monster -- \
 当前普通怪目录：
 
 ```text
-common/cloudtail-coral/       云尾兽（v2 重制）
+common/silkwind-quill-marten/ 绡风翎貂
 common/razorplume-marauder/   刃翎掠夺者
 common/inkveil-duelist/       墨幕决斗灵
 uncommon/shardback-knuckler/  碎晶拳兽
