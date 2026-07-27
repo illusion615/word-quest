@@ -95,6 +95,7 @@ export function useGameSession(
     response: string,
     correctAnswer?: string,
     choiceFeedback?: SessionAnswer['choiceFeedback'],
+    senseResults?: SessionAnswer['senseResults'],
   ) => {
     if (!session || session.phase !== 'asking') return;
     const questionKey = `${session.startedAt}:${session.index}:${session.questionStartedAt}`;
@@ -118,6 +119,7 @@ export function useGameSession(
       responseTimeMs,
       timeLimitMs,
       usedHint: false,
+      ...(senseResults?.length ? { senseResults } : {}),
     });
     onAnswerResolved?.({
       correct,
@@ -130,6 +132,7 @@ export function useGameSession(
       response,
       correctAnswer: correctAnswer ?? correctAnswerFor(mode, word),
       ...(choiceFeedback ? { choiceFeedback } : {}),
+      ...(senseResults?.length ? { senseResults } : {}),
     }));
     setAutoAdvanceRemainingMs(AUTO_ADVANCE_DELAY_MS);
     setAutoAdvancePaused(false);

@@ -262,7 +262,7 @@ describe('PracticeSession completion actions', () => {
       speechSupported: true,
     });
 
-    expect(html).toContain('听发音，选出全部正确释义');
+    expect(html).toContain('听发音，选出全部正确释义（共 2 项）');
     expect(html.match(/选出全部正确释义/g)).toHaveLength(1);
     expect(html).not.toContain('听发音，选出正确释义');
     expect(html).not.toContain(`<strong>${item.word.word}</strong>`);

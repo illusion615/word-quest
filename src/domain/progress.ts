@@ -147,12 +147,24 @@ export function recordAnswer(
   const nextCard = scheduler.next(card, now, grade).card;
   const attempts = (current?.attempts ?? 0) + 1;
   const correct = (current?.correct ?? 0) + (answer.correct ? 1 : 0);
+  const senses = answer.senseResults?.length
+    ? answer.senseResults.reduce((next, result) => {
+        const previous = next[result.senseId];
+        next[result.senseId] = {
+          attempts: (previous?.attempts ?? 0) + 1,
+          correct: (previous?.correct ?? 0) + (result.correct ? 1 : 0),
+          lastReviewedAt: answer.answeredAt,
+        };
+        return next;
+      }, { ...current?.senses })
+    : current?.senses;
   const progress: WordProgress = {
     wordId: answer.wordId,
     attempts,
     correct,
     mastery: Math.round((correct / attempts) * 100),
     card: serializeCard(nextCard),
+    ...(senses ? { senses } : {}),
   };
 
   return {

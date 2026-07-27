@@ -5,9 +5,11 @@ import type { MeaningOption } from '../../domain/challenge';
 import {
   buildMeaningOptions,
   buildMeaningSelectionFeedback,
+  buildMeaningSenseResults,
   correctMeaningIds,
   gradeMeaningSelection,
 } from '../../domain/challenge';
+import { parseWordSenses } from '../../domain/wordText';
 import { ChoiceSenseDetail } from '../ChoiceSenseDetail';
 import { resolveChoiceReviewState } from './ChoiceReviewMark';
 import { ReviewableChoice, useReviewedChoiceInspection } from './ReviewableChoice';
@@ -24,6 +26,7 @@ interface MatchMeaningQuestionProps {
     response: string,
     correctAnswer: string,
     choiceFeedback?: SessionAnswer['choiceFeedback'],
+    senseResults?: SessionAnswer['senseResults'],
   ) => void;
   onDraftChange?: (draft: SessionAnswer | null) => void;
   hideAnswerCount?: boolean;
@@ -31,6 +34,7 @@ interface MatchMeaningQuestionProps {
   preferSimilarDistractors?: boolean;
   reviewed?: boolean;
   wordProgress?: WordProgress;
+  targetSenseIds?: readonly string[];
   onReviewInspectionChange?: (inspecting: boolean) => void;
   audioOnly?: boolean;
   speechError?: string;
@@ -38,8 +42,8 @@ interface MatchMeaningQuestionProps {
 }
 
 /**
- * Show the word (and read it aloud); the learner selects ALL of its meanings.
- * Single-sense words become a one-answer question via the option builder.
+ * Show the word (and read it aloud); the learner selects every correct meaning
+ * in this planned semantic batch. Later reviews rotate through later senses.
  */
 export function MatchMeaningQuestion({
   word,
@@ -55,6 +59,7 @@ export function MatchMeaningQuestion({
   preferSimilarDistractors = false,
   reviewed = false,
   wordProgress,
+  targetSenseIds,
   onReviewInspectionChange,
   audioOnly = false,
   speechError = '',
@@ -63,7 +68,8 @@ export function MatchMeaningQuestion({
   const options = useMemo(() => buildMeaningOptions(word, entries, {
     extraOptionCount,
     preferSimilarDistractors,
-  }), [entries, extraOptionCount, preferSimilarDistractors, word]);
+    targetSenseIds,
+  }), [entries, extraOptionCount, preferSimilarDistractors, targetSenseIds, word]);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const { inspectedId, handleChoiceClick } = useReviewedChoiceInspection({
     reviewed,
@@ -71,10 +77,11 @@ export function MatchMeaningQuestion({
   });
 
   useEffect(() => {
-    setSelected(new Set());
-    onDraftChange?.(null);
+    const emptySelection = new Set<string>();
+    setSelected(emptySelection);
+    onDraftChange?.(submissionFor(emptySelection));
     if (isSpeechSupported) onSpeak(word.word);
-  }, [isSpeechSupported, onDraftChange, onSpeak, word.word]);
+  }, [isSpeechSupported, onDraftChange, onSpeak, options, word.word]);
 
   function submissionFor(selection: Set<string>): SessionAnswer {
     const correct = gradeMeaningSelection(options, selection);
@@ -91,6 +98,7 @@ export function MatchMeaningQuestion({
       response: chosen,
       correctAnswer: answer,
       choiceFeedback: buildMeaningSelectionFeedback(options, selection),
+      senseResults: buildMeaningSenseResults(options, selection),
     };
   }
 
@@ -99,7 +107,7 @@ export function MatchMeaningQuestion({
     if (next.has(id)) next.delete(id);
     else next.add(id);
     setSelected(next);
-    onDraftChange?.(next.size > 0 ? submissionFor(next) : null);
+    onDraftChange?.(submissionFor(next));
   }
 
   function handleSubmit() {
@@ -109,13 +117,17 @@ export function MatchMeaningQuestion({
       submission.response,
       submission.correctAnswer,
       submission.choiceFeedback,
+      submission.senseResults,
     );
   }
 
   const correctCount = correctMeaningIds(options).length;
+  const totalSenseCount = parseWordSenses(word).length;
   const meaningPrompt = hideAnswerCount
-    ? '选出全部正确释义'
-    : `选出全部正确释义（共 ${correctCount} 项）`;
+    ? '选出本轮全部正确释义'
+    : totalSenseCount > correctCount
+      ? `本轮考查 ${correctCount} / ${totalSenseCount} 个义项，选出全部正确项`
+      : `选出全部正确释义（共 ${correctCount} 项）`;
 
   return (
     <div className="question-layout">

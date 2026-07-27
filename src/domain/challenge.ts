@@ -1,5 +1,10 @@
-import type { AnswerChoiceFeedback, WordEntry } from './models';
-import { primarySense, splitDefinitionSenses } from './wordText';
+import type {
+  AnswerChoiceFeedback,
+  SenseAnswerResult,
+  WordEntry,
+  WordSenseProgress,
+} from './models';
+import { parseWordSenses, primarySense } from './wordText';
 
 /**
  * Builders for the battle's recognition challenges:
@@ -13,6 +18,7 @@ export interface MeaningOption {
   correct: boolean;
   word: WordEntry;
   senseIndex: number;
+  senseId: string;
 }
 
 export interface WordOption {
@@ -34,14 +40,57 @@ function shuffle<T>(items: readonly T[], random: () => number): T[] {
   return out;
 }
 
-function uniqueSenses(value: string): Array<{ text: string; senseIndex: number }> {
+function uniqueSenses(word: WordEntry): Array<{ id: string; text: string; senseIndex: number }> {
   const seen = new Set<string>();
-  return splitDefinitionSenses(value).flatMap((sense, senseIndex) => {
-    const text = sense.trim();
+  return parseWordSenses(word).flatMap((sense, senseIndex) => {
+    const text = `${sense.label}${sense.label ? ' ' : ''}${sense.text}`.trim();
     if (!text || seen.has(text)) return [];
     seen.add(text);
-    return [{ text, senseIndex }];
+    return [{ id: sense.id, text, senseIndex }];
   });
+}
+
+function safeSenseProgress(progress: WordSenseProgress | undefined) {
+  const attempts = Number.isFinite(progress?.attempts) ? Math.max(0, progress!.attempts) : 0;
+  const correct = Number.isFinite(progress?.correct) ? Math.max(0, progress!.correct) : 0;
+  const reviewedAt = progress?.lastReviewedAt ? Date.parse(progress.lastReviewedAt) : Number.NaN;
+  return {
+    attempts,
+    accuracy: attempts > 0 ? correct / attempts : 0,
+    reviewedAt: Number.isFinite(reviewedAt) ? reviewedAt : Number.NEGATIVE_INFINITY,
+  };
+}
+
+/**
+ * Selects a small semantic batch without losing the dictionary's sense order:
+ * unseen senses first, then weak senses, then the least recently reviewed.
+ */
+export function selectMeaningSenseIds(
+  word: WordEntry,
+  progress: Record<string, WordSenseProgress> | undefined,
+  limit = MAX_CORRECT_MEANINGS,
+): string[] {
+  return uniqueSenses(word)
+    .map((sense, sourceIndex) => ({
+      ...sense,
+      sourceIndex,
+      progress: safeSenseProgress(progress?.[sense.id]),
+    }))
+    .sort((left, right) => (
+      Number(left.progress.attempts > 0) - Number(right.progress.attempts > 0)
+      || left.progress.accuracy - right.progress.accuracy
+      || left.progress.reviewedAt - right.progress.reviewedAt
+      || left.sourceIndex - right.sourceIndex
+    ))
+    .slice(0, Math.max(1, Math.floor(limit)))
+    .map((sense) => sense.id);
+}
+
+export function hasUncoveredMeaningSenses(
+  word: WordEntry,
+  progress: Record<string, WordSenseProgress> | undefined,
+): boolean {
+  return uniqueSenses(word).some((sense) => !progress?.[sense.id]?.attempts);
 }
 
 function frequencyDistance(target: WordEntry, candidate: WordEntry): number {
@@ -125,6 +174,8 @@ export function buildMeaningOptions(
     optionCount?: number;
     extraOptionCount?: number;
     maxCorrect?: number;
+    targetSenseIds?: readonly string[];
+    senseProgress?: Record<string, WordSenseProgress>;
     preferSimilarDistractors?: boolean;
     random?: () => number;
   } = {},
@@ -134,7 +185,16 @@ export function buildMeaningOptions(
   const optionCount = Math.max(1, (config.optionCount ?? DEFAULT_MEANING_OPTIONS) + extraOptionCount);
   const maxCorrect = Math.max(1, config.maxCorrect ?? MAX_CORRECT_MEANINGS);
 
-  const correctSenses = uniqueSenses(word.definitionZh).slice(0, maxCorrect);
+  const senses = uniqueSenses(word);
+  const targetSenseIds = config.targetSenseIds?.length
+    ? new Set(config.targetSenseIds)
+    : new Set(selectMeaningSenseIds(word, config.senseProgress, maxCorrect));
+  const targetedSenses = senses
+    .filter((sense) => targetSenseIds.has(sense.id))
+    .slice(0, maxCorrect);
+  const correctSenses = targetedSenses.length > 0
+    ? targetedSenses
+    : senses.slice(0, maxCorrect);
   const seen = new Set(correctSenses.map((sense) => sense.text));
   const distractors: MeaningOption[] = [];
   const candidates = orderDistractorCandidates(
@@ -145,7 +205,7 @@ export function buildMeaningOptions(
   );
   for (const candidate of candidates) {
     if (candidate.id === word.id) continue;
-    const sense = uniqueSenses(candidate.definitionZh)[0];
+    const sense = uniqueSenses(candidate)[0];
     if (!sense || seen.has(sense.text)) continue;
     seen.add(sense.text);
     distractors.push({
@@ -154,17 +214,19 @@ export function buildMeaningOptions(
       correct: false,
       word: candidate,
       senseIndex: sense.senseIndex,
+      senseId: sense.id,
     });
   }
 
   const selectedDistractors = distractors.slice(0, Math.max(0, optionCount - correctSenses.length));
   return shuffle([
-    ...correctSenses.map(({ text, senseIndex }) => ({
+    ...correctSenses.map(({ id: senseId, text, senseIndex }) => ({
       id: text,
       text,
       correct: true,
       word,
       senseIndex,
+      senseId,
     })),
     ...selectedDistractors,
   ], random);
@@ -201,6 +263,18 @@ export function buildMeaningSelectionFeedback(
   });
 }
 
+export function buildMeaningSenseResults(
+  options: readonly MeaningOption[],
+  selected: ReadonlySet<string>,
+): SenseAnswerResult[] {
+  return options
+    .filter((option) => option.correct)
+    .map((option) => ({
+      senseId: option.senseId,
+      correct: selected.has(option.id),
+    }));
+}
+
 /**
  * Word choices for match-word / listen-word: the target plus distractor words
  * whose primary meaning differs, so there is one unambiguous answer.
@@ -211,6 +285,7 @@ export function buildWordOptions(
   config: {
     optionCount?: number;
     extraOptionCount?: number;
+    targetSenseId?: string;
     preferSimilarDistractors?: boolean;
     preferSimilarPronunciations?: boolean;
     random?: () => number;
@@ -219,7 +294,8 @@ export function buildWordOptions(
   const random = config.random ?? Math.random;
   const extraOptionCount = Math.max(0, Math.floor(config.extraOptionCount ?? 0));
   const optionCount = Math.max(1, (config.optionCount ?? DEFAULT_WORD_OPTIONS) + extraOptionCount);
-  const targetSense = primarySense(word.definitionZh);
+  const targetSense = uniqueSenses(word).find((sense) => sense.id === config.targetSenseId)?.text
+    ?? primarySense(word.definitionZh);
   const seen = new Set([word.id]);
   const distractors: WordEntry[] = [];
   const candidates = orderDistractorCandidates(
@@ -231,7 +307,7 @@ export function buildWordOptions(
   );
   for (const candidate of candidates) {
     if (seen.has(candidate.id)) continue;
-    if (primarySense(candidate.definitionZh) === targetSense) continue;
+    if (uniqueSenses(candidate).some((sense) => sense.text === targetSense)) continue;
     seen.add(candidate.id);
     distractors.push(candidate);
     if (distractors.length >= optionCount - 1) break;

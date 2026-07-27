@@ -13,9 +13,11 @@ import type {
 import { State } from 'ts-fsrs';
 import {
   buildStudyCandidates,
+  DEFAULT_NEW_WORD_LIMIT,
   type ChallengeDifficulty,
   type StudyCandidate,
 } from './progress';
+import { hasUncoveredMeaningSenses, selectMeaningSenseIds } from './challenge';
 
 // Scheduling reserves a couple of mandatory review words per reading and offers
 // the model a wider pool of the most schedule-urgent, level-appropriate words.
@@ -26,7 +28,7 @@ export const CHAIN_SEED_SIZE = 1;
 export const CHAIN_POOL_SIZE = 14;
 export const CHAIN_TARGET_SIZE = 6;
 export const CHAIN_MAX_SIZE = 8;
-export const CHAIN_OFFLINE_SIZE = 4;
+export const CHAIN_OFFLINE_SIZE = DEFAULT_NEW_WORD_LIMIT;
 export const CLEARANCE_REVIEW_SIZE = 8;
 export const ACTIVE_RECALL_STABILITY_DAYS = 7;
 
@@ -56,6 +58,7 @@ const DEFAULT_STUDY_CAPABILITIES: StudyCapabilities = { speechPlayback: true };
 export function getAdaptiveStage(
   progress: WordProgress | undefined,
   capabilities: StudyCapabilities = DEFAULT_STUDY_CAPABILITIES,
+  needsSenseCoverage = false,
 ): AdaptiveStage {
   // New / still-learning words face the easiest recognition: the word is shown
   // and read aloud, and the learner picks its meaning(s).
@@ -75,11 +78,33 @@ export function getAdaptiveStage(
   // Stable words alternate audio recognition and full audio spelling; without
   // speech support the meaning-to-word form remains usable.
   if (!capabilities.speechPlayback) {
+    if (needsSenseCoverage && progress.attempts % 3 === 0) {
+      return { stage: 'context', mode: 'match-word', label: '扩展词义' };
+    }
     return { stage: 'recall', mode: 'match-word', label: '辨形提取' };
+  }
+  if (needsSenseCoverage && progress.attempts % 3 === 0) {
+    return { stage: 'context', mode: 'match-word', label: '扩展词义' };
   }
   return progress.attempts % 2 === 1
     ? { stage: 'recall', mode: 'listen-word', label: '听音辨词' }
     : { stage: 'recall', mode: 'listening', label: '听音拼写' };
+}
+
+function targetSenseLimit(mode: GameMode): number {
+  if (mode === 'match-meaning' || mode === 'listen-meaning') return 3;
+  if (mode === 'match-word' || mode === 'boss') return 1;
+  return 0;
+}
+
+function targetSenseIds(
+  word: WordEntry,
+  progress: WordProgress | undefined,
+  mode: GameMode,
+): string[] | undefined {
+  const limit = targetSenseLimit(mode);
+  if (limit === 0) return undefined;
+  return selectMeaningSenseIds(word, progress?.senses, limit);
 }
 
 function candidateStage(candidate: StudyCandidate, state: LearningState): LearningStage {
@@ -166,11 +191,18 @@ export function materializeChain(
   capabilities: StudyCapabilities = DEFAULT_STUDY_CAPABILITIES,
 ): AdaptiveStudyItem[] {
   return words.map((word, chainPosition) => {
-    const adaptive = getAdaptiveStage(state.progress[word.id], capabilities);
+    const progress = state.progress[word.id];
+    const adaptive = getAdaptiveStage(
+      progress,
+      capabilities,
+      hasUncoveredMeaningSenses(word, progress?.senses),
+    );
+    const senseIds = targetSenseIds(word, progress, adaptive.mode);
     return {
       word,
       mode: adaptive.mode,
       stage: adaptive.stage,
+      ...(senseIds?.length ? { targetSenseIds: senseIds } : {}),
       chainIndex: blueprint.chainIndex,
       chainPosition,
       chainRationale: blueprint.rationale,
@@ -216,11 +248,18 @@ export function buildClearanceReview(
     .slice(0, CLEARANCE_REVIEW_SIZE);
   const passage = offlinePassage(words, '本关新词已全部引入，当前进行通关复核。');
   return words.map((word, chainPosition) => {
-    const adaptive = getAdaptiveStage(state.progress[word.id], capabilities);
+    const progress = state.progress[word.id];
+    const adaptive = getAdaptiveStage(
+      progress,
+      capabilities,
+      hasUncoveredMeaningSenses(word, progress?.senses),
+    );
+    const senseIds = targetSenseIds(word, progress, adaptive.mode);
     return {
       word,
       mode: adaptive.mode,
       stage: adaptive.stage,
+      ...(senseIds?.length ? { targetSenseIds: senseIds } : {}),
       chainIndex: 0,
       chainPosition,
       chainRationale: {

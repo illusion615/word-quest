@@ -10,8 +10,8 @@
   },
   "outputLanguage": "Simplified Chinese",
   "model": "Qwen3.6-35B-A3B-4bit",
-  "generatedAt": "2026-07-27T10:52:52.199Z",
+  "generatedAt": "2026-07-27T14:20:01.926Z",
   "uniqueWordCount": 10498,
-  "generatedCount": 1966,
+  "generatedCount": 2862,
   "complete": false
 }

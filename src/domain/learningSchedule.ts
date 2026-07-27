@@ -3,7 +3,6 @@ import type {
   AnswerRecord,
   GameMode,
   LearningState,
-  WordEntry,
   WordProgress,
 } from './models';
 
@@ -25,6 +24,10 @@ export interface StudyAvailability {
   newCount: number;
   stableCount: number;
   nextReviewAt: Date | null;
+}
+
+interface StudyWord {
+  id: string;
 }
 
 const DEFAULT_TIME_LIMITS = {
@@ -102,7 +105,7 @@ export function rateAnswer(answer: AnswerRecord): Grade {
 }
 
 export function getStudyAvailability(
-  entries: WordEntry[],
+  entries: readonly StudyWord[],
   state: LearningState,
   now = new Date(),
 ): StudyAvailability {

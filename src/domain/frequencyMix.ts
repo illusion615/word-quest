@@ -1,5 +1,10 @@
 import type { WordEntry } from './models';
 
+export interface FrequencyEntry {
+  frequencyRank?: number;
+  frequencyPercentile?: number;
+}
+
 export const FREQUENCY_BAND_COUNT = 4;
 
 export type FrequencyProfile = 'common-led' | 'balanced' | 'rare-led';
@@ -10,7 +15,7 @@ const PROFILE_WEIGHTS: Record<FrequencyProfile, readonly number[]> = {
   'rare-led': [0.1, 0.15, 0.3, 0.45],
 };
 
-export function withFrequencyMetadata(entries: readonly WordEntry[]): WordEntry[] {
+export function withFrequencyMetadata<T extends FrequencyEntry>(entries: readonly T[]): T[] {
   return entries.map((entry, index) => ({
     ...entry,
     frequencyRank: index,
@@ -18,7 +23,7 @@ export function withFrequencyMetadata(entries: readonly WordEntry[]): WordEntry[
   }));
 }
 
-export function frequencyBand(word: WordEntry, fallbackIndex = 0, total = 1): number {
+export function frequencyBand(word: FrequencyEntry, fallbackIndex = 0, total = 1): number {
   const percentile = word.frequencyPercentile
     ?? (total <= 1 ? 0 : fallbackIndex / (total - 1));
   return Math.min(
@@ -27,8 +32,8 @@ export function frequencyBand(word: WordEntry, fallbackIndex = 0, total = 1): nu
   );
 }
 
-export function splitFrequencyBands(entries: readonly WordEntry[]): WordEntry[][] {
-  const bands = Array.from({ length: FREQUENCY_BAND_COUNT }, () => [] as WordEntry[]);
+export function splitFrequencyBands<T extends FrequencyEntry>(entries: readonly T[]): T[][] {
+  const bands = Array.from({ length: FREQUENCY_BAND_COUNT }, () => [] as T[]);
   entries.forEach((entry, index) => {
     bands[frequencyBand(entry, index, entries.length)].push(entry);
   });
@@ -73,14 +78,14 @@ export function allocateFrequencyQuotas(
   return quotas;
 }
 
-export function weaveFrequencyBands(
-  bandWords: readonly WordEntry[][],
+export function weaveFrequencyBands<T>(
+  bandWords: readonly T[][],
   tieWeights: readonly number[] = PROFILE_WEIGHTS.balanced,
-): WordEntry[] {
+): T[] {
   const targetCounts = bandWords.map((words) => words.length);
   const used = bandWords.map(() => 0);
   const total = targetCounts.reduce((sum, count) => sum + count, 0);
-  const mixed: WordEntry[] = [];
+  const mixed: T[] = [];
 
   for (let position = 0; position < total; position += 1) {
     const candidates = bandWords

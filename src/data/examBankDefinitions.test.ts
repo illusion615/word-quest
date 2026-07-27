@@ -8,13 +8,22 @@ function loadBank(file: string): Array<{ id: string; definitionZh: string }> {
   return JSON.parse(readFileSync(resolve('public/data/exam-banks', file), 'utf8'));
 }
 
+function loadBankIndex(): { banks: Record<string, string[]> } {
+  return JSON.parse(readFileSync(resolve('public/data/exam-banks/bank-index.json'), 'utf8'));
+}
+
 function verbSenses(definitionZh: string): string[] {
   return splitDefinitionSenses(definitionZh).filter((sense) => /^(vt|vi|v)\.\s/i.test(sense.trim()));
 }
 
 describe('exam bank Chinese definitions', () => {
   const gaokao = loadBank('gaokao.json');
+  const bankIndex = loadBankIndex();
   const byId = new Map(gaokao.map((entry) => [entry.id, entry]));
+
+  it('keeps the lightweight journey index aligned with full bank order', () => {
+    expect(bankIndex.banks.gaokao).toEqual(gaokao.map((entry) => entry.id));
+  });
 
   it('strips spurious verb senses from WordNet-known non-verbs', () => {
     // "safety" is a noun in WordNet; ECDICT wrongly appended "vt. 保护, 防护".

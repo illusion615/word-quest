@@ -7,6 +7,7 @@ import type {
   WordEntry,
 } from './models';
 import { isReviewDue } from './learningSchedule';
+import { selectMeaningSenseIds } from './challenge';
 
 export const BOSS_QUESTION_COUNT = 12;
 export const BOSS_STAGE_SIZE = 4;
@@ -112,10 +113,20 @@ export function buildBossAssessmentPlan(
     const chainIndex = Math.floor(index / BOSS_STAGE_SIZE);
     const chainPosition = index % BOSS_STAGE_SIZE;
     const stage = BOSS_STAGES[chainIndex] ?? BOSS_STAGES.at(-1)!;
+    const mode = stageModes(chainIndex, capabilities.speechPlayback)[chainPosition];
+    const senseLimit = mode === 'match-meaning' || mode === 'listen-meaning'
+      ? 3
+      : mode === 'match-word' || mode === 'boss'
+        ? 1
+        : 0;
+    const targetSenseIds = senseLimit > 0
+      ? selectMeaningSenseIds(word, state.progress[word.id]?.senses, senseLimit)
+      : [];
     return {
       word,
-      mode: stageModes(chainIndex, capabilities.speechPlayback)[chainPosition],
+      mode,
       stage: STAGE_LEARNING_STAGE[chainIndex] ?? 'recall',
+      ...(targetSenseIds.length ? { targetSenseIds } : {}),
       chainIndex,
       chainPosition,
       chainRationale: {

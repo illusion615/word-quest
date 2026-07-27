@@ -62,7 +62,9 @@ export function monsterOrbitPosition(
     // Counter most of the ring rotation so every monster remains readable,
     // while a small residual turn still reveals the curvature of the formation.
     facingDeg: -angleDeg * 0.92,
-    scale: Math.max(0.68, 1 - (depth * 0.22) - (side * 0.04)),
-    opacity: hiddenBehindFocus ? 0 : Math.max(0.34, 1 - (depth * 0.58)),
+    scale: Math.max(0.62, 1 - (depth * 0.32) - (side * 0.03)),
+    opacity: hiddenBehindFocus
+      ? 0
+      : Math.max(0.22, 1 - (depth * 0.78) - (side * 0.04)),
   };
 }

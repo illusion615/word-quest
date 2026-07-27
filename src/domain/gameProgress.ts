@@ -106,6 +106,26 @@ export function getClearedLevelNumberSet(
   );
 }
 
+export function getLatestChallengeAt(
+  progress: GameProgressV1,
+  bankId: BankId,
+): string | null {
+  const prefix = `${bankId}:level:`;
+  let latestAt: string | null = null;
+  let latestTime = Number.NEGATIVE_INFINITY;
+
+  for (const [key, result] of Object.entries(progress.levelResults)) {
+    if (!key.startsWith(prefix)) continue;
+    const challengeTime = Date.parse(result.updatedAt);
+    if (Number.isFinite(challengeTime) && challengeTime > latestTime) {
+      latestAt = result.updatedAt;
+      latestTime = challengeTime;
+    }
+  }
+
+  return latestAt;
+}
+
 function isGameProgress(value: unknown): value is GameProgressV1 {
   if (!value || typeof value !== 'object') return false;
   const candidate = value as Partial<GameProgressV1>;

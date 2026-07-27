@@ -5,6 +5,15 @@ export type BankId =
   | 'ielts'
   | 'toefl';
 
+export type ResourceLoadPhase = 'connecting' | 'downloading' | 'processing' | 'complete';
+
+export interface ResourceLoadProgress {
+  phase: ResourceLoadPhase;
+  loadedBytes: number;
+  totalBytes: number | null;
+  percentage: number | null;
+}
+
 export type GameMode =
   | 'listening'
   | 'choice'
@@ -152,6 +161,12 @@ export interface AnswerRecord {
   timeLimitMs?: number;
   usedHint?: boolean;
   fsrsRating?: 1 | 2 | 3 | 4;
+  senseResults?: SenseAnswerResult[];
+}
+
+export interface SenseAnswerResult {
+  senseId: string;
+  correct: boolean;
 }
 
 export interface SerializedFsrsCard {
@@ -174,6 +189,14 @@ export interface WordProgress {
   /** Historical answer accuracy percentage; not a durable-mastery signal. */
   mastery: number;
   card: SerializedFsrsCard;
+  /** Lightweight semantic coverage; the word still owns one FSRS card. */
+  senses?: Record<string, WordSenseProgress>;
+}
+
+export interface WordSenseProgress {
+  attempts: number;
+  correct: number;
+  lastReviewedAt: string;
 }
 
 export interface LearningState {
@@ -187,6 +210,7 @@ export interface SessionAnswer {
   response: string;
   correctAnswer: string;
   choiceFeedback?: AnswerChoiceFeedback[];
+  senseResults?: SenseAnswerResult[];
 }
 
 export type AnswerChoiceStatus = 'correct' | 'incorrect' | 'missed';
@@ -206,6 +230,8 @@ export interface AdaptiveStudyItem {
   word: WordEntry;
   mode: GameMode;
   stage: LearningStage;
+  /** Stable dictionary sense IDs selected when the study plan is built. */
+  targetSenseIds?: string[];
   chainIndex: number;
   chainPosition: number;
   chainRationale: ChainRationale;

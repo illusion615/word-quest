@@ -54,11 +54,13 @@ describe('game session', () => {
       response: '已选择的释义',
       correctAnswer: '正确释义',
       choiceFeedback: [{ text: '已选择的释义', status: 'incorrect' }],
+      senseResults: [{ senseId: 'word:s0', correct: false }],
     })).toEqual([
       false,
       '已选择的释义',
       '正确释义',
       [{ text: '已选择的释义', status: 'incorrect' }],
+      [{ senseId: 'word:s0', correct: false }],
     ]);
     expect(resolveTimeoutSubmission(null)).toEqual([false, '']);
   });

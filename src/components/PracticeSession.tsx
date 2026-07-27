@@ -63,6 +63,7 @@ interface PracticeSessionProps {
     response: string,
     correctAnswer?: string,
     choiceFeedback?: SessionAnswer['choiceFeedback'],
+    senseResults?: SessionAnswer['senseResults'],
   ) => void;
   onStartChain: () => void;
   onNext: () => void;
@@ -267,11 +268,12 @@ export function PracticeSession({
     response: string,
     correctAnswer?: string,
     choiceFeedback?: SessionAnswer['choiceFeedback'],
+    senseResults?: SessionAnswer['senseResults'],
   ) => {
     if (submittedQuestionRef.current === questionKey) return;
     submittedQuestionRef.current = questionKey;
     questionDraftRef.current = null;
-    onSubmit(correct, response, correctAnswer, choiceFeedback);
+    onSubmit(correct, response, correctAnswer, choiceFeedback, senseResults);
   }, [onSubmit, questionKey]);
 
   useEffect(() => {
@@ -577,6 +579,7 @@ export function PracticeSession({
                 onSubmit={handleQuestionSubmit}
                 onDraftChange={handleDraftChange}
                 reviewAnswer={reviewAnswer}
+                targetSenseId={currentItem.targetSenseIds?.[0]}
               />
             )}
             {mode === 'match-meaning' && (
@@ -593,6 +596,7 @@ export function PracticeSession({
                 preferSimilarDistractors={preferSimilarDistractors}
                 reviewed={reviewed}
                 wordProgress={currentWordProgress}
+                targetSenseIds={currentItem.targetSenseIds}
                 onReviewInspectionChange={handleChoiceInspectionChange}
               />
             )}
@@ -610,6 +614,8 @@ export function PracticeSession({
                 extraOptionCount={extraOptionCount}
                 preferSimilarDistractors={preferSimilarDistractors}
                 reviewed={reviewed}
+                wordProgress={currentWordProgress}
+                targetSenseIds={currentItem.targetSenseIds}
                 onReviewInspectionChange={handleChoiceInspectionChange}
                 audioOnly
                 speechError={speechError}
@@ -624,6 +630,7 @@ export function PracticeSession({
                 preferSimilarDistractors={preferSimilarDistractors}
                 reviewed={reviewed}
                 onReviewInspectionChange={handleChoiceInspectionChange}
+                targetSenseId={currentItem.targetSenseIds?.[0]}
                 onSubmit={handleQuestionSubmit}
               />
             )}

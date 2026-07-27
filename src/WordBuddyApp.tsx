@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { CircleHelp, Moon, Sparkles, Sun, Trophy, Volume2 } from './icons';
 import logo from './assets/logo2.webp';
 import { AchievementDialog } from './components/AchievementDialog';
@@ -27,7 +27,7 @@ import {
   getJourneyLevelEntries,
   resolveLevelCompletionAction,
 } from './domain/journey';
-import { getClearedLevelNumberSet } from './domain/gameProgress';
+import { getClearedLevelNumberSet, getLatestChallengeAt } from './domain/gameProgress';
 import type {
   AdaptiveStudyItem,
   BankId,
@@ -51,6 +51,7 @@ import { bossPassingScore, buildBossAssessmentPlan } from './domain/boss';
 import { useAiConnection } from './hooks/useAiConnection';
 import { useAchievements } from './hooks/useAchievements';
 import { useBankCoverage } from './hooks/useBankCoverage';
+import { useBankWordIds } from './hooks/useBankWordIds';
 import { useCombat } from './hooks/useCombat';
 import { useGameProgress } from './hooks/useGameProgress';
 import { useGameSession } from './hooks/useGameSession';
@@ -85,6 +86,28 @@ function applyTheme(theme: Theme): void {
 
 const DIFFICULTY_KEY = 'wordbuddy.challenge.difficulty.v1';
 const BOOSTS_KEY = 'wordbuddy.challenge.boosts.v1';
+const SELECTED_BANK_KEY = 'wordbuddy.selected-bank.v1';
+const DEFAULT_BANK: BankId = 'gaokao';
+
+function loadSelectedBank(): BankId {
+  if (typeof window === 'undefined') return DEFAULT_BANK;
+  try {
+    const storedBank = window.localStorage.getItem(SELECTED_BANK_KEY);
+    return WORD_BANKS.some((bank) => bank.id === storedBank)
+      ? storedBank as BankId
+      : DEFAULT_BANK;
+  } catch {
+    return DEFAULT_BANK;
+  }
+}
+
+function persistSelectedBank(bankId: BankId): void {
+  try {
+    window.localStorage.setItem(SELECTED_BANK_KEY, bankId);
+  } catch {
+    // Storage may be unavailable; the in-memory selection still applies this session.
+  }
+}
 
 function loadDifficulty(): ChallengeDifficulty {
   if (typeof window === 'undefined') return 'standard';
@@ -110,7 +133,7 @@ function persistBoosts(next: ActiveBoosts): void {
 }
 
 export default function WordBuddyApp() {
-  const [selectedBank, setSelectedBank] = useState<BankId>('gaokao');
+  const [selectedBank, setSelectedBank] = useState<BankId>(loadSelectedBank);
   const [theme, setTheme] = useState<Theme>(currentTheme);
   const [difficulty, setDifficulty] = useState<ChallengeDifficulty>(loadDifficulty);
   const [activeBoosts, setActiveBoosts] = useState<ActiveBoosts>(loadBoosts);
@@ -121,6 +144,7 @@ export default function WordBuddyApp() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [speechSettingsOpen, setSpeechSettingsOpen] = useState(false);
   const [sessionPreparing, setSessionPreparing] = useState(false);
+  const [journeyNow, setJourneyNow] = useState(() => new Date());
   const [pendingAiWord, setPendingAiWord] = useState<WordEntry | null>(null);
   const [coachInsight, setCoachInsight] = useState<WordCoachInsight | null>(null);
   const preparationIdRef = useRef(0);
@@ -211,25 +235,77 @@ export default function WordBuddyApp() {
     window.scrollTo(0, 0);
   }, [sessionActive]);
 
+  useEffect(() => {
+    const refreshJourneyTime = () => setJourneyNow(new Date());
+    const handleVisibilityChange = () => {
+      if (!document.hidden) refreshJourneyTime();
+    };
+    const interval = window.setInterval(refreshJourneyTime, 60_000);
+    window.addEventListener('focus', refreshJourneyTime);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refreshJourneyTime);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
+
+  const {
+    ids: selectedBankWordIds,
+    loading: journeyIndexLoading,
+    error: journeyIndexError,
+    progress: journeyIndexProgress,
+    retry: retryJourneyIndex,
+  } = useBankWordIds(selectedBank);
   const {
     entries: selectedEntries,
     loading: bankLoading,
     error: bankError,
     retry: retryBank,
-  } = useWordBank(selectedBank);
+  } = useWordBank(selectedBank, !journeyIndexLoading);
   const currentWordBankNames = currentWord
     ? getMemberships(currentWord.id)
         .map((bankId) => WORD_BANKS.find((bank) => bank.id === bankId)?.name)
         .filter((name): name is string => Boolean(name))
     : [];
   const selectedBankManifest = WORD_BANKS.find((bank) => bank.id === selectedBank) ?? WORD_BANKS[0];
-  const clearedLevelsForBank = getClearedLevelNumberSet(gameProgress.progress, selectedBank);
-  const selectedJourney = buildBankJourney(
-    selectedEntries,
-    learningState,
-    selectedBank,
-    clearedLevelsForBank,
+  const clearedLevelsForBank = useMemo(
+    () => getClearedLevelNumberSet(gameProgress.progress, selectedBank),
+    [gameProgress.progress, selectedBank],
   );
+  const lightweightJourneyWords = useMemo(
+    () => selectedBankWordIds.map((id) => ({ id })),
+    [selectedBankWordIds],
+  );
+  const journeyWords = lightweightJourneyWords.length > 0
+    ? lightweightJourneyWords
+    : selectedEntries;
+  const selectedJourney = useMemo(
+    () => buildBankJourney(
+      journeyWords,
+      learningState,
+      selectedBank,
+      clearedLevelsForBank,
+      journeyNow,
+    ),
+    [clearedLevelsForBank, journeyNow, journeyWords, learningState, selectedBank],
+  );
+  const latestChallengeAt = useMemo(
+    () => getLatestChallengeAt(gameProgress.progress, selectedBank),
+    [gameProgress.progress, selectedBank],
+  );
+  const journeyLoading = journeyIndexLoading || (
+    lightweightJourneyWords.length === 0 && bankLoading
+  );
+  const journeyError = lightweightJourneyWords.length === 0
+    && selectedEntries.length === 0
+    && !bankLoading
+    ? (bankError ?? journeyIndexError)
+    : bankError;
+  const retrySelectedBank = useCallback(() => {
+    retryJourneyIndex();
+    retryBank();
+  }, [retryBank, retryJourneyIndex]);
   const challengeLevelIndex = challengeLevelIndexRef.current ?? selectedJourney.activeLevelIndex ?? 0;
   const challengeLevel = selectedJourney.chapters
     .flatMap((chapter) => chapter.levels)
@@ -377,6 +453,7 @@ export default function WordBuddyApp() {
   function handleSelectBank(bankId: BankId) {
     challengeLevelIndexRef.current = null;
     setSelectedBank(bankId);
+    persistSelectedBank(bankId);
   }
 
   function handleSelectDifficulty(next: ChallengeDifficulty) {
@@ -550,22 +627,26 @@ export default function WordBuddyApp() {
             coverageLoading={coverageLoading}
             coverageError={coverageError}
             sessionPreparing={sessionPreparing}
+            todayCompleted={stats.today}
+            lastChallengeAt={latestChallengeAt}
             onSelectBank={handleSelectBank}
             onRetryCoverage={retryCoverage}
           />
           <div className="header-actions">
-            <select
-              className="difficulty-select"
-              value={difficulty}
-              onChange={(event) => handleSelectDifficulty(event.target.value as ChallengeDifficulty)}
-              aria-label="挑战度（新词生ԏ度）"
-              title="挑战度：控制新词的生ԏ难度"
-            >
-              <option value="relaxed">轻松</option>
-              <option value="standard">标准</option>
-              <option value="hardcore">硬核</option>
-            </select>
-            <span className="today-count">今日 {stats.today} 题</span>
+            <label className="new-word-preference">
+              <span>新词偏好</span>
+              <select
+                className="difficulty-select"
+                value={difficulty}
+                onChange={(event) => handleSelectDifficulty(event.target.value as ChallengeDifficulty)}
+                aria-label="新词偏好"
+                title="只影响普通关卡中的未学新词；到期复习词仍优先，战斗强度不变。"
+              >
+                <option value="relaxed">常见词优先</option>
+                <option value="standard">按关卡顺序</option>
+                <option value="hardcore">生僻词优先</option>
+              </select>
+            </label>
             <button
               type="button"
               className="icon-button"
@@ -685,16 +766,19 @@ export default function WordBuddyApp() {
       ) : (
         <Dashboard
           currentBank={selectedBankManifest}
+          journey={selectedJourney}
+          journeyLoading={journeyLoading}
+          journeyLoadProgress={journeyIndexLoading ? journeyIndexProgress : null}
+          gameProgress={gameProgress.progress}
           entries={selectedEntries}
           learningState={learningState}
-          gameProgress={gameProgress.progress}
           coverage={coverage}
           bankLoading={bankLoading || !progressHydrated}
           sessionPreparing={sessionPreparing}
           aiConfigured={aiConfigured}
-          bankError={bankError}
+          bankError={journeyError}
           onStartLevel={(levelIndex) => void beginSession(levelIndex)}
-          onRetryBank={retryBank}
+          onRetryBank={retrySelectedBank}
         />
       )}
 

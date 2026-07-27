@@ -3,14 +3,16 @@ import type { BankId, WordEntry } from '../domain/models';
 import { loadWordBank } from '../data/bankRepository';
 
 interface WordBankState {
+  bankId: BankId | null;
   entries: WordEntry[];
   loading: boolean;
   error: string | null;
 }
 
-export function useWordBank(bankId: BankId) {
+export function useWordBank(bankId: BankId, enabled = true) {
   const [reloadToken, setReloadToken] = useState(0);
   const [state, setState] = useState<WordBankState>({
+    bankId: null,
     entries: [],
     loading: true,
     error: null,
@@ -18,14 +20,18 @@ export function useWordBank(bankId: BankId) {
 
   useEffect(() => {
     let active = true;
-    setState({ entries: [], loading: true, error: null });
+    setState({ bankId, entries: [], loading: true, error: null });
+    if (!enabled) return () => {
+      active = false;
+    };
     void loadWordBank(bankId)
       .then((entries) => {
-        if (active) setState({ entries, loading: false, error: null });
+        if (active) setState({ bankId, entries, loading: false, error: null });
       })
       .catch((error) => {
         if (active) {
           setState({
+            bankId,
             entries: [],
             loading: false,
             error: error instanceof Error ? error.message : '词库加载失败。',
@@ -35,9 +41,12 @@ export function useWordBank(bankId: BankId) {
     return () => {
       active = false;
     };
-  }, [bankId, reloadToken]);
+  }, [bankId, enabled, reloadToken]);
 
   const retry = useCallback(() => setReloadToken((token) => token + 1), []);
+  const currentState = state.bankId === bankId
+    ? state
+    : { bankId, entries: [], loading: true, error: null };
 
-  return { ...state, retry };
+  return { ...currentState, retry };
 }

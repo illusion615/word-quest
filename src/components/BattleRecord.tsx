@@ -1,7 +1,6 @@
-import { ExternalLink, Info, RefreshCw } from '../icons';
+import { ExternalLink, RefreshCw } from '../icons';
 import type { BankCoverageMap } from '../domain/coverage';
 import type { BankId, WordBankManifest } from '../domain/models';
-import { CoverageRings } from './CoverageRings';
 
 interface BattleRecordProps {
   banks: WordBankManifest[];
@@ -10,8 +9,22 @@ interface BattleRecordProps {
   coverageLoading: boolean;
   coverageError: string | null;
   sessionPreparing: boolean;
+  todayCompleted: number;
+  lastChallengeAt: string | null;
   onSelectBank: (bankId: BankId) => void;
   onRetryCoverage: () => void;
+}
+
+function formatChallengeTime(timestamp: string): string {
+  const challengeTime = new Date(timestamp);
+  if (Number.isNaN(challengeTime.getTime())) return '尚未挑战';
+  return challengeTime.toLocaleString('zh-CN', {
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
 }
 
 export function BattleRecord({
@@ -21,6 +34,8 @@ export function BattleRecord({
   coverageLoading,
   coverageError,
   sessionPreparing,
+  todayCompleted,
+  lastChallengeAt,
   onSelectBank,
   onRetryCoverage,
 }: BattleRecordProps) {
@@ -39,27 +54,51 @@ export function BattleRecord({
           <div>
             <p className="section-index">词库战绩</p>
             <h1 id="battle-record-heading">{currentBank.name}</h1>
-            <span>{currentBank.count.toLocaleString()} 只词怪</span>
+            <span className="battle-record-meta">
+              {currentBank.count.toLocaleString()} 只词怪 · {statusLabel}
+            </span>
+            {currentBank.sourceUrl ? (
+              <a
+                className="battle-record-origin"
+                href={currentBank.sourceUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {currentBank.basis} · {currentBank.sourceVersion}
+                <ExternalLink aria-hidden="true" />
+              </a>
+            ) : (
+              <span className="battle-record-origin">
+                {currentBank.basis} · {currentBank.sourceVersion}
+              </span>
+            )}
           </div>
-          <CoverageRings
-            learningPercentage={learningPercentage}
-            masteryPercentage={masteryPercentage}
-            label={currentBank.name}
-          />
         </div>
 
-        <div className="battle-coverage" aria-label={`${currentBank.name}覆盖率`}>
-          <div>
+        <div className="battle-overview" aria-label={`${currentBank.name}学习概览`}>
+          <div className="battle-overview-stat is-progress">
             <span>学习覆盖</span>
             <strong>{coverageLoading ? '计算中' : `${learningPercentage}%`}</strong>
             <div className="battle-progress is-learning"><span style={{ width: `${learningPercentage}%` }} /></div>
             <small>{currentCoverage?.learned ?? 0} / {currentBank.count.toLocaleString()} 个词</small>
           </div>
-          <div>
+          <div className="battle-overview-stat is-progress">
             <span>稳定掌握</span>
             <strong>{coverageLoading ? '计算中' : `${masteryPercentage}%`}</strong>
             <div className="battle-progress is-mastery"><span style={{ width: `${masteryPercentage}%` }} /></div>
             <small>{currentCoverage?.mastered ?? 0} / {currentBank.count.toLocaleString()} 个词</small>
+          </div>
+          <div className="battle-overview-stat is-motivation">
+            <span>今日完成</span>
+            <strong>{todayCompleted.toLocaleString()} 题</strong>
+          </div>
+          <div className="battle-overview-stat is-motivation">
+            <span>最近挑战</span>
+            <strong>
+              {lastChallengeAt ? (
+                <time dateTime={lastChallengeAt}>{formatChallengeTime(lastChallengeAt)}</time>
+              ) : '尚未挑战'}
+            </strong>
           </div>
         </div>
       </div>
@@ -81,19 +120,6 @@ export function BattleRecord({
             </button>
           );
         })}
-      </div>
-
-      <div className="source-note battle-record-source">
-        <Info aria-hidden="true" />
-        <div>
-          <strong>{statusLabel}</strong>
-          <p>{currentBank.basis} · {currentBank.sourceVersion}</p>
-        </div>
-        {currentBank.sourceUrl && (
-          <a href={currentBank.sourceUrl} target="_blank" rel="noreferrer">
-            {currentBank.sourceName} <ExternalLink aria-hidden="true" />
-          </a>
-        )}
       </div>
 
       {coverageError && (

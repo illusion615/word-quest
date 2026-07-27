@@ -1,4 +1,9 @@
-import type { BankId, WordBankManifest, WordEntry } from '../domain/models';
+import type {
+  BankId,
+  ResourceLoadProgress,
+  WordBankManifest,
+  WordEntry,
+} from '../domain/models';
 import type { CoverageIndexData } from '../domain/coverage';
 import { EXAM_BANK_MANIFEST } from './exam-bank-metadata.generated';
 
@@ -26,7 +31,89 @@ export const WORD_BANKS: WordBankManifest[] = EXAM_BANK_MANIFEST.banks.map((bank
 
 const bankMap = new Map(WORD_BANKS.map((bank) => [bank.id, bank]));
 const bankPromises = new Map<BankId, Promise<WordEntry[]>>();
+let bankIndexPromise: Promise<Record<BankId, string[]>> | null = null;
 let coverageIndexPromise: Promise<CoverageIndexData> | null = null;
+const bankIndexProgressListeners = new Set<(progress: ResourceLoadProgress) => void>();
+let bankIndexProgress: ResourceLoadProgress = {
+  phase: 'connecting',
+  loadedBytes: 0,
+  totalBytes: null,
+  percentage: null,
+};
+
+function publishBankIndexProgress(progress: ResourceLoadProgress): void {
+  bankIndexProgress = progress;
+  bankIndexProgressListeners.forEach((listener) => listener(progress));
+}
+
+export async function readJsonResponseWithProgress(
+  response: Response,
+  onProgress: (progress: ResourceLoadProgress) => void,
+): Promise<unknown> {
+  const headerTotal = Number(response.headers.get('content-length'));
+  const encoded = Boolean(response.headers.get('content-encoding'));
+  const totalBytes = !encoded && Number.isFinite(headerTotal) && headerTotal > 0
+    ? headerTotal
+    : null;
+
+  onProgress({
+    phase: 'downloading',
+    loadedBytes: 0,
+    totalBytes,
+    percentage: totalBytes ? 0 : null,
+  });
+
+  if (!response.body) {
+    const value: unknown = await response.json();
+    onProgress({
+      phase: 'complete',
+      loadedBytes: totalBytes ?? 0,
+      totalBytes,
+      percentage: 100,
+    });
+    return value;
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let loadedBytes = 0;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    loadedBytes += value.byteLength;
+    onProgress({
+      phase: 'downloading',
+      loadedBytes,
+      totalBytes,
+      percentage: totalBytes
+        ? Math.min(99, Math.round((loadedBytes / totalBytes) * 100))
+        : null,
+    });
+  }
+
+  onProgress({
+    phase: 'processing',
+    loadedBytes,
+    totalBytes,
+    percentage: totalBytes ? 99 : null,
+  });
+  const bytes = new Uint8Array(loadedBytes);
+  let offset = 0;
+  chunks.forEach((chunk) => {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  });
+  const value: unknown = JSON.parse(new TextDecoder().decode(bytes).replace(/^\uFEFF/, ''));
+  onProgress({
+    phase: 'complete',
+    loadedBytes,
+    totalBytes,
+    percentage: 100,
+  });
+  return value;
+}
 
 function validateEntries(value: unknown, bank: WordBankManifest): WordEntry[] {
   if (!Array.isArray(value) || value.length !== bank.count) {
@@ -65,6 +152,64 @@ export function loadWordBank(bankId: BankId): Promise<WordEntry[]> {
     });
   bankPromises.set(bankId, request);
   return request;
+}
+
+function validateBankIndex(value: unknown): Record<BankId, string[]> {
+  if (!value || typeof value !== 'object') throw new Error('关卡索引格式无效。');
+  const candidate = value as {
+    schemaVersion?: number;
+    banks?: Partial<Record<BankId, unknown>>;
+  };
+  if (candidate.schemaVersion !== 1 || !candidate.banks) {
+    throw new Error('关卡索引与当前词库版本不匹配。');
+  }
+
+  const result = {} as Record<BankId, string[]>;
+  for (const bank of WORD_BANKS) {
+    const ids = candidate.banks[bank.id];
+    if (!Array.isArray(ids)
+      || ids.length !== bank.count
+      || ids.some((id) => typeof id !== 'string' || id.length === 0)) {
+      throw new Error(`${bank.name} 关卡索引数量不匹配。`);
+    }
+    result[bank.id] = ids;
+  }
+  return result;
+}
+
+export function loadBankWordIds(
+  bankId: BankId,
+  onProgress?: (progress: ResourceLoadProgress) => void,
+): Promise<string[]> {
+  if (onProgress) {
+    bankIndexProgressListeners.add(onProgress);
+    onProgress(bankIndexProgress);
+  }
+  if (!bankIndexPromise) {
+    publishBankIndexProgress({
+      phase: 'connecting',
+      loadedBytes: 0,
+      totalBytes: null,
+      percentage: null,
+    });
+    bankIndexPromise = fetch(`${import.meta.env.BASE_URL}data/exam-banks/bank-index.json`)
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`关卡索引加载失败 (${response.status})。`);
+        return validateBankIndex(await readJsonResponseWithProgress(
+          response,
+          publishBankIndexProgress,
+        ));
+      })
+      .catch((error) => {
+        bankIndexPromise = null;
+        throw error;
+      });
+  }
+  return bankIndexPromise
+    .then((index) => index[bankId])
+    .finally(() => {
+      if (onProgress) bankIndexProgressListeners.delete(onProgress);
+    });
 }
 
 function validateCoverageIndex(value: unknown): CoverageIndexData {

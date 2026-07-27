@@ -113,6 +113,28 @@ describe('learning progress', () => {
     expect(new Date(next.progress.achieve.card.due).getTime()).toBeGreaterThan(now.getTime());
   });
 
+  it('accumulates sense coverage inside the existing word progress', () => {
+    const firstAt = '2026-07-19T10:00:00.000Z';
+    const secondAt = '2026-07-20T10:00:00.000Z';
+    const first = recordAnswer(createEmptyLearningState(), {
+      ...answer('accept', false, firstAt),
+      senseResults: [
+        { senseId: 'accept:s0', correct: true },
+        { senseId: 'accept:s1', correct: false },
+      ],
+    });
+    const second = recordAnswer(first, {
+      ...answer('accept', true, secondAt),
+      senseResults: [{ senseId: 'accept:s1', correct: true }],
+    });
+
+    expect(second.progress.accept.senses).toEqual({
+      'accept:s0': { attempts: 1, correct: 1, lastReviewedAt: firstAt },
+      'accept:s1': { attempts: 2, correct: 1, lastReviewedAt: secondAt },
+    });
+    expect(second.progress.accept.attempts).toBe(2);
+  });
+
   it('prioritizes due words before unseen words', () => {
     const now = new Date('2026-07-19T10:00:00.000Z');
     const learned = recordAnswer(

@@ -85,6 +85,19 @@ describe('bank learning journey', () => {
     expect(journey.chapters.flatMap((chapter) => chapter.levels)).toHaveLength(journey.totalLevels);
   });
 
+  it('builds the same journey from lightweight ID-only entries', () => {
+    const words = entries(60);
+    const state = learningState(words.slice(0, 12).map((word) => word.id));
+    const cleared = new Set([1]);
+
+    expect(buildBankJourney(
+      words.map(({ id }) => ({ id })),
+      state,
+      'gaokao',
+      cleared,
+    )).toEqual(buildBankJourney(words, state, 'gaokao', cleared));
+  });
+
   it('keeps stable mastery separate from battle-based level unlocks', () => {
     const words = entries(60);
     const stablePercentage = 80;

@@ -102,6 +102,21 @@ describe('adaptive study plan', () => {
     }))).toMatchObject({ stage: 'recall', mode: 'listening' });
   });
 
+  it('periodically returns stable words to semantic coverage while senses remain unseen', () => {
+    expect(getAdaptiveStage(progress(6, 100, {
+      state: State.Review,
+      stability: ACTIVE_RECALL_STABILITY_DAYS,
+    }), { speechPlayback: true }, true)).toMatchObject({
+      stage: 'context',
+      mode: 'match-word',
+      label: '扩展词义',
+    });
+    expect(getAdaptiveStage(progress(7, 100, {
+      state: State.Review,
+      stability: ACTIVE_RECALL_STABILITY_DAYS,
+    }), { speechPlayback: true }, true)).toMatchObject({ stage: 'recall' });
+  });
+
   it('caps fresh sessions instead of filling multiple chains with every unseen word', () => {
     const entries = makeEntries(40);
     const blueprints = buildChainBlueprints(entries, emptyState, 2, new Date('2026-07-19T00:00:00Z'));
@@ -177,6 +192,47 @@ describe('adaptive study plan', () => {
     expect(items.every((item) => item.chainIndex === 0)).toBe(true);
     expect(items.every((item) => item.chainPassage === passage)).toBe(true);
     expect(items.every((item) => item.mode === 'match-meaning')).toBe(true);
+    expect(items.every((item) => item.targetSenseIds?.[0].endsWith(':s0'))).toBe(true);
+  });
+
+  it('locks the next unseen meaning batch into the planned question', () => {
+    const word = {
+      ...makeEntries(1)[0],
+      definitionZh: 'n. 甲；n. 乙；n. 丙；n. 丁；n. 戊；n. 己',
+    };
+    const firstSenseIds = [`${word.id}:s0`, `${word.id}:s1`, `${word.id}:s2`];
+    const state: LearningState = {
+      version: 1,
+      progress: {
+        [word.id]: {
+          ...progress(1, 100),
+          wordId: word.id,
+          senses: Object.fromEntries(firstSenseIds.map((senseId) => [senseId, {
+            attempts: 1,
+            correct: 1,
+            lastReviewedAt: '2026-07-20T00:00:00.000Z',
+          }])),
+        },
+      },
+      history: [],
+    };
+    const blueprint: ChainBlueprint = {
+      chainIndex: 0,
+      seeds: [word],
+      pool: [word],
+      rationale: { kind: 'coverage', label: '测试', description: '测试' },
+    };
+
+    expect(materializeChain(
+      blueprint,
+      [word],
+      { text: word.word, translation: '测试', source: 'offline' },
+      state,
+    )[0].targetSenseIds).toEqual([
+      `${word.id}:s3`,
+      `${word.id}:s4`,
+      `${word.id}:s5`,
+    ]);
   });
 
   it('materializes sound-stage words without listening mode when speech is unavailable', () => {
@@ -208,7 +264,7 @@ describe('adaptive study plan', () => {
   });
 
   it('falls back to seeds plus filler words with an offline passage', () => {
-    const entries = makeEntries(6);
+    const entries = makeEntries(8);
     const blueprint: ChainBlueprint = {
       chainIndex: 1,
       seeds: entries.slice(0, 2),
@@ -219,6 +275,7 @@ describe('adaptive study plan', () => {
     const items = buildOfflineChain(blueprint, emptyState, '离线');
 
     expect(items).toHaveLength(CHAIN_OFFLINE_SIZE);
+    expect(items).toHaveLength(8);
     expect(items.slice(0, CHAIN_SEED_SIZE).map((item) => item.word.id))
       .toEqual(entries.slice(0, CHAIN_SEED_SIZE).map((word) => word.id));
     expect(items.every((item) => item.chainPassage.source === 'offline')).toBe(true);

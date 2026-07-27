@@ -8,6 +8,12 @@ import {
 } from './frequencyMix';
 import { getStudyAvailability } from './learningSchedule';
 
+export interface JourneyWord {
+  id: string;
+  frequencyRank?: number;
+  frequencyPercentile?: number;
+}
+
 export const WORDS_PER_LEVEL = 25;
 export const TARGET_LEVELS_PER_CHAPTER = 20;
 export const BOSS_LEVEL_INTERVAL = 5;
@@ -166,12 +172,12 @@ function frequencyWeights(progress: number): number[] {
  * Each block mixes four frequency bands; the ratio moves smoothly from
  * 40/30/20/10 to 10/20/30/40 over the journey.
  */
-export function orderByFrequencyCurve(entries: WordEntry[]): WordEntry[] {
+export function orderByFrequencyCurve<T extends JourneyWord>(entries: readonly T[]): T[] {
   if (entries.length <= 1) return [...entries];
   const bands = splitFrequencyBands(entries);
   const offsets = bands.map(() => 0);
   const totalLevels = Math.ceil(entries.length / WORDS_PER_LEVEL);
-  const ordered: WordEntry[] = [];
+  const ordered: T[] = [];
 
   for (let levelIndex = 0; levelIndex < totalLevels; levelIndex += 1) {
     const remaining = entries.length - ordered.length;
@@ -204,7 +210,10 @@ export function orderByFrequencyCurve(entries: WordEntry[]): WordEntry[] {
   return ordered;
 }
 
-export function orderWordsByJourney(entries: WordEntry[], bankId?: BankId): WordEntry[] {
+export function orderWordsByJourney<T extends JourneyWord>(
+  entries: readonly T[],
+  bankId?: BankId,
+): T[] {
   const ranked = withFrequencyMetadata(entries);
   // Bank membership already scopes the curriculum. Sub-level basics remain in
   // the common band as anchors instead of being pushed into an all-basic tail;
@@ -264,7 +273,7 @@ export function getBossLevelEntries(
 }
 
 export function buildBankJourney(
-  entries: WordEntry[],
+  entries: readonly JourneyWord[],
   state: LearningState,
   bankId?: BankId,
   clearedLevels: Set<number> = new Set(),

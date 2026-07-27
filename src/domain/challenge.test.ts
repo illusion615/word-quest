@@ -3,9 +3,11 @@ import type { WordEntry } from './models';
 import {
   buildMeaningOptions,
   buildMeaningSelectionFeedback,
+  buildMeaningSenseResults,
   buildWordOptions,
   correctMeaningIds,
   gradeMeaningSelection,
+  selectMeaningSenseIds,
 } from './challenge';
 
 function makeWord(word: string, definitionZh: string): WordEntry {
@@ -64,6 +66,36 @@ describe('buildMeaningOptions', () => {
     expect(options).toHaveLength(6);
     expect(options.filter((option) => !option.correct)).toHaveLength(4);
   });
+
+  it('rotates from the first three senses to the next unseen senses', () => {
+    const target = makeWord(
+      'accept',
+      'vt. 接受；vt. 采用；vt. 吸收；vt. 聘用；vt. 相信；vt. 忍受',
+    );
+    const firstIds = selectMeaningSenseIds(target, undefined);
+    const firstProgress = Object.fromEntries(firstIds.map((senseId) => [senseId, {
+      attempts: 1,
+      correct: 1,
+      lastReviewedAt: '2026-07-20T00:00:00.000Z',
+    }]));
+
+    expect(firstIds).toEqual(['accept:s0', 'accept:s1', 'accept:s2']);
+    expect(selectMeaningSenseIds(target, firstProgress))
+      .toEqual(['accept:s3', 'accept:s4', 'accept:s5']);
+  });
+
+  it('revisits weak senses after every sense has been covered', () => {
+    const target = makeWord('accept', 'vt. 接受；vt. 采用；vt. 相信；vt. 忍受');
+    const progress = Object.fromEntries(
+      selectMeaningSenseIds(target, undefined, 4).map((senseId, index) => [senseId, {
+        attempts: 2,
+        correct: index === 2 ? 0 : 2,
+        lastReviewedAt: `2026-07-2${index}T00:00:00.000Z`,
+      }]),
+    );
+
+    expect(selectMeaningSenseIds(target, progress, 1)).toEqual(['accept:s2']);
+  });
 });
 
 describe('gradeMeaningSelection', () => {
@@ -88,6 +120,18 @@ describe('gradeMeaningSelection', () => {
       { text: correct[1], status: 'missed' },
     ]));
     expect(feedback).toHaveLength(3);
+  });
+
+  it('records an outcome for every tested target sense', () => {
+    const selected = new Set([correct[0]]);
+    const selectedSenseId = options.find((option) => option.id === correct[0])!.senseId;
+    const missedSenseId = options.find((option) => (
+      option.correct && option.id !== correct[0]
+    ))!.senseId;
+    expect(buildMeaningSenseResults(options, selected)).toEqual(expect.arrayContaining([
+      { senseId: selectedSenseId, correct: true },
+      { senseId: missedSenseId, correct: false },
+    ]));
   });
 });
 
@@ -121,6 +165,18 @@ describe('buildWordOptions', () => {
     expect(distractorIds).toEqual(expect.arrayContaining(['stream', 'lake']));
     expect(distractorIds).not.toContain('sprint');
     expect(distractorIds).not.toContain('ocean');
+  });
+
+  it('filters distractors against the planned later target sense', () => {
+    const target = makeWord('bank', 'n. 银行；n. 岸');
+    const shore = makeWord('shore', 'n. 岸');
+    const options = buildWordOptions(target, [target, shore, ...pool], {
+      optionCount: 4,
+      targetSenseId: 'bank:s1',
+      random: stableRandom,
+    });
+
+    expect(options.some((option) => option.word.id === 'shore')).toBe(false);
   });
 
   it('prioritizes similar phonetics for listening word choices', () => {

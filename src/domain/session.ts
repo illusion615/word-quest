@@ -38,9 +38,21 @@ export const AUTO_ADVANCE_DELAY_MS = 3_000;
 
 export function resolveTimeoutSubmission(
   draft: SessionAnswer | null,
-): readonly [boolean, string, string?, SessionAnswer['choiceFeedback']?] {
+): readonly [
+  boolean,
+  string,
+  string?,
+  SessionAnswer['choiceFeedback']?,
+  SessionAnswer['senseResults']?,
+] {
   return draft
-    ? [draft.correct, draft.response, draft.correctAnswer, draft.choiceFeedback]
+    ? [
+        draft.correct,
+        draft.response,
+        draft.correctAnswer,
+        draft.choiceFeedback,
+        draft.senseResults,
+      ]
     : [false, ''];
 }
 

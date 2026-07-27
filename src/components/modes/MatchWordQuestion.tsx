@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
-import type { WordEntry } from '../../domain/models';
+import type { SessionAnswer, WordEntry } from '../../domain/models';
 import { buildWordOptions } from '../../domain/challenge';
-import { primarySense } from '../../domain/wordText';
+import { parseWordSenses, primarySense } from '../../domain/wordText';
 import { ChoiceSenseDetail } from '../ChoiceSenseDetail';
 import { resolveChoiceReviewState } from './ChoiceReviewMark';
 import { ReviewableChoice, useReviewedChoiceInspection } from './ReviewableChoice';
@@ -13,7 +13,14 @@ interface MatchWordQuestionProps {
   preferSimilarDistractors?: boolean;
   reviewed?: boolean;
   onReviewInspectionChange?: (inspecting: boolean) => void;
-  onSubmit: (correct: boolean, response: string, correctAnswer: string) => void;
+  targetSenseId?: string;
+  onSubmit: (
+    correct: boolean,
+    response: string,
+    correctAnswer: string,
+    choiceFeedback?: SessionAnswer['choiceFeedback'],
+    senseResults?: SessionAnswer['senseResults'],
+  ) => void;
 }
 
 /** Show the Chinese meaning; the learner picks the matching word. */
@@ -24,22 +31,31 @@ export function MatchWordQuestion({
   preferSimilarDistractors = false,
   reviewed = false,
   onReviewInspectionChange,
+  targetSenseId,
   onSubmit,
 }: MatchWordQuestionProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const options = useMemo(() => buildWordOptions(word, entries, {
     extraOptionCount,
     preferSimilarDistractors,
-  }), [entries, extraOptionCount, preferSimilarDistractors, word]);
+    targetSenseId,
+  }), [entries, extraOptionCount, preferSimilarDistractors, targetSenseId, word]);
   const { inspectedId, handleChoiceClick } = useReviewedChoiceInspection({
     reviewed,
     onInspectionChange: onReviewInspectionChange,
   });
+  const senses = parseWordSenses(word);
+  const targetSenseIndex = Math.max(0, senses.findIndex((sense) => sense.id === targetSenseId));
+  const targetSense = senses[targetSenseIndex];
+  const resolvedSenseId = targetSense?.id;
+  const targetDefinition = targetSense
+    ? `${targetSense.label}${targetSense.label ? ' ' : ''}${targetSense.text}`
+    : primarySense(word.definitionZh);
 
   return (
     <div className="question-layout">
       <p className="question-kicker">选出与释义匹配的单词</p>
-      <p className="boss-definition">{primarySense(word.definitionZh)}</p>
+      <p className="boss-definition">{targetDefinition}</p>
       <div
         className="choice-grid"
         role="group"
@@ -61,9 +77,20 @@ export function MatchWordQuestion({
               inspecting={inspectedId === option.id}
               onClick={() => handleChoiceClick(option.id, option.correct, () => {
                 setSelectedId(option.id);
-                onSubmit(option.correct, option.word.word, word.word);
+                onSubmit(
+                  option.correct,
+                  option.word.word,
+                  word.word,
+                  undefined,
+                  resolvedSenseId
+                    ? [{ senseId: resolvedSenseId, correct: option.correct }]
+                    : undefined,
+                );
               })}
-              detail={<ChoiceSenseDetail word={option.word} senseIndex={0} />}
+              detail={<ChoiceSenseDetail
+                word={option.word}
+                senseIndex={option.correct ? targetSenseIndex : 0}
+              />}
             />
           );
         })}

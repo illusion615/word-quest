@@ -5,6 +5,7 @@ import {
   createEmptyGameProgress,
   getClearedBossLevelSet,
   getClearedLevelNumberSet,
+  getLatestChallengeAt,
   levelResultKey,
   parseGameProgress,
   recordLevelResult,
@@ -73,6 +74,39 @@ describe('game progress', () => {
 
     expect(progress.levelResults[levelResultKey('gaokao', 1)]?.wins).toBe(1);
     expect(getClearedLevelNumberSet(progress, 'gaokao').has(1)).toBe(false);
+  });
+
+  it('finds the latest challenge for the selected word bank', () => {
+    const first = recordLevelResult(
+      createEmptyGameProgress(),
+      'gaokao',
+      1,
+      victory(),
+      'normal',
+      true,
+      '2026-07-20T08:00:00.000Z',
+    );
+    const second = recordLevelResult(
+      first,
+      'cet4',
+      1,
+      victory(),
+      'normal',
+      true,
+      '2026-07-22T08:00:00.000Z',
+    );
+    const latest = recordLevelResult(
+      second,
+      'gaokao',
+      2,
+      victory(),
+      'normal',
+      true,
+      '2026-07-21T08:00:00.000Z',
+    );
+
+    expect(getLatestChallengeAt(latest, 'gaokao')).toBe('2026-07-21T08:00:00.000Z');
+    expect(getLatestChallengeAt(latest, 'toefl')).toBeNull();
   });
 
   it('persists boss clear only when boss battle is won', () => {

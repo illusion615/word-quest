@@ -51,4 +51,22 @@ describe('monster orbit', () => {
     expect(positions[2]).toMatchObject({ angleDeg: 0, opacity: 1 });
     expect(positions[3].opacity).toBeGreaterThan(0);
   });
+
+  it('fades an eight-monster wheel progressively with distance from the focus', () => {
+    const positions = Array.from({ length: 8 }, (_, index) => (
+      monsterOrbitPosition(index, 0, 8)
+    ));
+
+    expect(positions.map((position) => position.slot))
+      .toEqual([0, 1, 2, 3, 4, -3, -2, -1]);
+    expect(positions[0]).toMatchObject({ scale: 1, opacity: 1 });
+    expect(positions[1].opacity).toBeGreaterThan(positions[2].opacity);
+    expect(positions[2].opacity).toBeGreaterThan(positions[3].opacity);
+    expect(positions[1].scale).toBeGreaterThan(positions[2].scale);
+    expect(positions[2].scale).toBeGreaterThan(positions[3].scale);
+    expect(positions[4].opacity).toBe(0);
+    expect(positions[1].opacity).toBeCloseTo(positions[7].opacity, 8);
+    expect(positions[2].scale).toBeCloseTo(positions[6].scale, 8);
+    expect(positions[3].depth).toBeCloseTo(positions[5].depth, 8);
+  });
 });
